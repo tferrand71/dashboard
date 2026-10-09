@@ -20,3 +20,31 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
 }
+
+model Folder {
+  id        String   @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    Folder?  @relation("FolderTree", fields: [parentId], references: [id])
+  children  Folder[] @relation("FolderTree")
+  files     File[]
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([name, parentId, ownerId])
+}
+
+model File {
+  id          String   @id @default(cuid())
+  name        String
+  size        Int
+  mimeType    String
+  folderId    String?
+  folder      Folder?  @relation(fields: [folderId], references: [id])
+  storagePath String   @unique
+  ownerId     String
+  createdAt   DateTime @default(now())
+
+  @@unique([name, folderId, ownerId])
+}

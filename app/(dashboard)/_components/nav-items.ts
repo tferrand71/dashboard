@@ -19,5 +19,5 @@ export const navItems: NavItem[] = [
         available: true,
     },
     { label: "Analytics", href: "/analytics", icon: ChartIcon, available: false },
-    { label: "Drive", href: "/drive", icon: DriveIcon, available: false },
+    { label: "Drive", href: "/drive", icon: DriveIcon, available: true },
 ];
