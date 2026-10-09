@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getGreeting } from "@/lib/format";
-import { ChartIcon, ContainerIcon, DriveIcon } from "./_components/icons";
+import { ChartIcon, DriveIcon } from "./_components/icons";
 import { ModuleCard } from "./_components/module-card";
 import {
     ProjectsPanel,
@@ -18,12 +18,6 @@ import {
 export const metadata: Metadata = { title: "Accueil" };
 
 const upcomingModules = [
-    {
-        title: "Conteneurs Docker",
-        description:
-            "Lister les conteneurs, lire leurs logs et les redémarrer sans ouvrir de session SSH.",
-        icon: ContainerIcon,
-    },
     {
         title: "Analytics",
         description:

@@ -16,7 +16,7 @@ export const navItems: NavItem[] = [
         label: "Conteneurs",
         href: "/conteneurs",
         icon: ContainerIcon,
-        available: false,
+        available: true,
     },
     { label: "Analytics", href: "/analytics", icon: ChartIcon, available: false },
     { label: "Drive", href: "/drive", icon: DriveIcon, available: false },
