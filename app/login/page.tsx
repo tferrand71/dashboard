@@ -29,32 +29,47 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-screen items-center justify-center bg-gray-50">
+        <div className="flex min-h-screen items-center justify-center bg-bg px-4">
             <form
                 onSubmit={handleSubmit}
-                className="w-full max-w-sm space-y-4 rounded-lg bg-white p-8 shadow"
+                className="w-full max-w-sm space-y-5 rounded-sm border border-line bg-surface p-8"
             >
-                <h1 className="text-xl font-semibold">Connexion</h1>
-                {error && <p className="text-sm text-red-600">{error}</p>}
-                <input
-                    type="email"
-                    placeholder="E-mail"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="w-full rounded border px-3 py-2"
-                    required
-                />
-                <input
-                    type="password"
-                    placeholder="Mot de passe"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full rounded border px-3 py-2"
-                    required
-                />
+                <div>
+                    <div className="mb-4 flex h-9 w-9 items-center justify-center rounded-sm bg-accent-soft font-mono text-sm text-accent">
+                        TF
+                    </div>
+                    <h1 className="text-lg font-medium text-text-primary">Connexion</h1>
+                    <p className="mt-1 text-sm text-text-secondary">tobias-ferrand.fr</p>
+                </div>
+
+                {error && (
+                    <p className="rounded-sm border border-accent/30 bg-accent-soft px-3 py-2 text-sm text-accent">
+                        {error}
+                    </p>
+                )}
+
+                <div className="space-y-3">
+                    <input
+                        type="email"
+                        placeholder="E-mail"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full rounded-sm border border-line bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:border-accent focus:outline-none"
+                        required
+                    />
+                    <input
+                        type="password"
+                        placeholder="Mot de passe"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full rounded-sm border border-line bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-secondary focus:border-accent focus:outline-none"
+                        required
+                    />
+                </div>
+
                 <button
                     type="submit"
-                    className="w-full rounded bg-black py-2 text-white"
+                    className="w-full rounded-sm bg-accent py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
                 >
                     Se connecter
                 </button>
