@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { ChartIcon, ContainerIcon, DriveIcon, HomeIcon } from "./icons";
+import { ChartIcon, ContainerIcon, DriveIcon, HomeIcon, ServerIcon } from "./icons";
 
 export type NavItem = {
     label: string;
@@ -18,6 +18,7 @@ export const navItems: NavItem[] = [
         icon: ContainerIcon,
         available: true,
     },
+    { label: "Système", href: "/systeme", icon: ServerIcon, available: true },
     { label: "Analytics", href: "/analytics", icon: ChartIcon, available: false },
     { label: "Drive", href: "/drive", icon: DriveIcon, available: true },
 ];

@@ -153,6 +153,27 @@ export function LogoutIcon({ className }: IconProps) {
     );
 }
 
+export function ServerIcon({ className }: IconProps) {
+    return (
+        <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            className={className ?? base}
+        >
+            <rect x="3" y="3" width="18" height="7" rx="1.5" />
+            <rect x="3" y="14" width="18" height="7" rx="1.5" />
+            <path d="M7 7h.01M7 17.5h.01" />
+            <circle cx="17" cy="7" r="1" fill="currentColor" stroke="none" />
+            <circle cx="17" cy="17.5" r="1" fill="currentColor" stroke="none" />
+        </svg>
+    );
+}
+
 export function GlobeIcon({ className }: IconProps) {
     return (
         <svg
