@@ -1,35 +1,178 @@
 @import "tailwindcss";
 
-:root {
-  --bg: #10141a;
-  --surface: #161b22;
-  --line: #262d38;
-  --text-primary: #e6e9ef;
-  --text-secondary: #8891a1;
-  --accent: #b3123b;
-  --accent-soft: rgba(179, 18, 59, 0.14);
-  --status-ready: #4fa98b;
+/* ──────────────────────────────────────────────────────────────
+   Identité visuelle « Midnight Violet » — alignée sur le
+   portfolio tobias-ferrand.fr, déclinée pour un outil dense.
+   ────────────────────────────────────────────────────────────── */
+
+@theme {
+    /* Fonds — du plus profond au plus clair */
+    --color-ink: #07050a; /* châssis : sidebar, barres, page nue */
+    --color-midnight: #13111c; /* fond principal du contenu */
+    --color-raised: #1b1826; /* carte opaque (données denses) */
+    --color-glass: rgba(30, 27, 46, 0.4);
+    --color-glass-strong: rgba(19, 17, 28, 0.85);
+    --color-hairline: rgba(255, 255, 255, 0.05);
+    --color-hairline-strong: rgba(255, 255, 255, 0.12);
+
+    /* Texte */
+    --color-text-main: #e2e0e9;
+    --color-text-muted: #8b8898; /* 5.5:1 sur midnight — AA */
+
+    /* Accents du portfolio */
+    --color-gold: #d4af37;
+    --color-mauve: #8b5cf6; /* décor, bordures, halos — jamais du texte fin */
+    --color-mauve-text: #a78bfa; /* 6.3:1 sur midnight — AA */
+    --color-pink: #ec4899;
+
+    /* Statuts — tenus dans la famille violette/or */
+    --color-ok: #2dd4bf;
+    --color-warn: #d4af37;
+    --color-down: #ef4444;
+
+    /* Typographie */
+    --font-serif: var(--font-playfair);
+    --font-sans: var(--font-inter);
+    --font-mono: var(--font-jetbrains);
 }
 
-@theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-line: var(--line);
-  --color-text-primary: var(--text-primary);
-  --color-text-secondary: var(--text-secondary);
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
-  --color-status-ready: var(--status-ready);
-  --font-sans: var(--font-plex-sans);
-  --font-mono: var(--font-plex-mono);
+@layer utilities {
+    .text-gradient-energetic {
+        @apply bg-clip-text text-transparent bg-gradient-to-r from-[var(--color-mauve)] via-[var(--color-pink)] to-[var(--color-gold)];
+    }
+
+    .glass-panel {
+        @apply bg-glass backdrop-blur-xl border border-hairline;
+    }
+
+    /* Micro-label or en capitales — signature du portfolio */
+    .eyebrow {
+        @apply text-[10px] font-bold uppercase tracking-[0.3em] text-gold;
+    }
+
+    .shadow-gold-glow {
+        box-shadow: 0 0 30px -5px var(--color-gold);
+    }
 }
 
 body {
-  background: var(--bg);
-  color: var(--text-primary);
-  font-family: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+    background-color: var(--color-midnight);
+    color: var(--color-text-main);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ── Accessibilité : focus clavier toujours visible ───────────── */
+:focus-visible {
+    outline: 2px solid var(--color-mauve-text);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+/* La souris ne déclenche pas l'anneau, le clavier oui. */
+:focus:not(:focus-visible) {
+    outline: none;
 }
 
 ::selection {
-  background: var(--accent-soft);
+    background: rgba(139, 92, 246, 0.35);
+    color: var(--color-text-main);
+}
+
+/* ── Halos ambiants (repris du hero du portfolio) ─────────────── */
+@keyframes drift {
+    0%,
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        opacity: 0.28;
+    }
+    50% {
+        transform: translate3d(4%, -3%, 0) scale(1.18);
+        opacity: 0.45;
+    }
+}
+
+.ambient-glow {
+    animation: drift 18s ease-in-out infinite;
+    will-change: transform, opacity;
+}
+
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 10px, 0);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+.animate-rise {
+    animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pulse-dot {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.35;
+    }
+}
+
+.animate-pulse-dot {
+    animation: pulse-dot 2.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+    to {
+        background-position: -200% 0;
+    }
+}
+
+/* Squelette de chargement */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.09) 50%,
+        rgba(255, 255, 255, 0.04) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ambient-glow,
+    .animate-rise,
+    .animate-pulse-dot,
+    .skeleton {
+        animation: none !important;
+    }
+    .animate-rise {
+        opacity: 1;
+        transform: none;
+    }
+    *,
+    *::before,
+    *::after {
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* ── Scrollbar (comme le portfolio) ──────────────────────────── */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: var(--color-ink);
+}
+::-webkit-scrollbar-thumb {
+    background: #3f3c4d;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-mauve);
 }
