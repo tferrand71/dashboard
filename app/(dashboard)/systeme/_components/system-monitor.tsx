@@ -1,6 +1,20 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { RedeployButton } from "./redeploy-button";
+
+// Infrastructure : jamais redéployée depuis l'interface. Redéployer le
+// dashboard ou l'agent couperait la requête qui les a demandé, et Traefik
+// ou PostgreSQL ne doivent pas être rebuildés à la volée.
+const INFRA_CONTAINERS = new Set([
+  "dashboard",
+  "deploy-agent",
+  "socket-proxy",
+  "socket-proxy-deploy",
+  "traefik",
+  "postgres",
+  "pg-backup",
+]);
 
 interface HostStats {
   cpu: { percent: number };
@@ -110,6 +124,9 @@ function ContainerRow({ c }: { c: ContainerStats }) {
       <span className="rounded-full border border-hairline-strong px-2 py-0.5 font-mono text-[10px] text-text-muted">
         {c.status}
       </span>
+
+      {/* Redéploiement (conteneurs lancés avec docker compose) */}
+      {!INFRA_CONTAINERS.has(c.name) && <RedeployButton containerId={c.id} />}
 
       {/* CPU */}
       <div className="text-right">
