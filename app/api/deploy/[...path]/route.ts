@@ -8,14 +8,14 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
   const url = `${AGENT_URL}/${path.join("/")}`;
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
+  const headers: Record<string, string> = {};
 
   let body: string | undefined;
   if (req.method !== "GET") {
-    body = await req.text();
+    body = (await req.text()) || undefined;
   }
+  // Fastify renvoie 400 si Content-Type JSON est envoyé avec un corps vide
+  if (body) headers["Content-Type"] = "application/json";
 
   const res = await fetch(url, {
     method: req.method,
@@ -23,7 +23,8 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     body,
   });
 
-  const data = res.status === 204 ? null : await res.json();
+  if (res.status === 204) return new NextResponse(null, { status: 204 });
+  const data = await res.json();
   return NextResponse.json(data, { status: res.status });
 }
 
