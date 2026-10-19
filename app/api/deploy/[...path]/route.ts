@@ -7,7 +7,8 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
-  const url = `${AGENT_URL}/${path.join("/")}`;
+  // Les paramètres de requête (filtres analytics…) suivent le chemin
+  const url = `${AGENT_URL}/${path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
   const headers: Record<string, string> = {};
 
   let body: string | undefined;
@@ -34,6 +35,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ path
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  const { path } = await params;
+  return proxy(req, path);
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
   return proxy(req, path);
 }

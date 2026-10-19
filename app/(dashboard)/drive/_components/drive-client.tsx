@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Download, FolderOpen, FolderPlus, Pencil, Trash2 } from "lucide-react";
+import { Dialog } from "../../_components/dialog";
+import { EmptyState, ErrorBanner, Skeleton } from "../../_components/ui";
 import { Breadcrumb } from "./breadcrumb";
-import { ContextMenu } from "./context-menu";
-import { FileItem, FolderItem } from "./drive-item";
+import { ContextMenu, type MenuAction } from "./context-menu";
+import { DriveHeaderRow, FileItem, FolderItem } from "./drive-item";
 import { NewFolderDialog } from "./new-folder-dialog";
 import { RenameDialog } from "./rename-dialog";
 import { UploadZone } from "./upload-zone";
@@ -12,14 +15,8 @@ import { UploadZone } from "./upload-zone";
 type FolderEntry = { id: string; name: string; createdAt: string; updatedAt: string };
 type FileEntry = { id: string; name: string; size: number; mimeType: string; createdAt: string };
 type Crumb = { id: string | null; name: string };
-
-type MenuState = {
-    x: number;
-    y: number;
-    type: "folder" | "file";
-    id: string;
-    name: string;
-};
+type Target = { type: "folder" | "file"; id: string; name: string };
+type MenuState = Target & { x: number; y: number };
 
 export function DriveClient() {
     const router = useRouter();
@@ -31,10 +28,12 @@ export function DriveClient() {
     const [breadcrumb, setBreadcrumb] = useState<Crumb[]>([{ id: null, name: "Drive" }]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
 
     const [showNewFolder, setShowNewFolder] = useState(false);
     const [menu, setMenu] = useState<MenuState | null>(null);
-    const [renameTarget, setRenameTarget] = useState<{ type: "folder" | "file"; id: string; name: string } | null>(null);
+    const [renameTarget, setRenameTarget] = useState<Target | null>(null);
+    const [deleteTarget, setDeleteTarget] = useState<Target | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -46,32 +45,33 @@ export function DriveClient() {
             const data = await res.json();
             setFolders(data.folders);
             setFiles(data.files);
-            if (folderId && data.breadcrumb) {
-                setBreadcrumb([{ id: null, name: "Drive" }, ...data.breadcrumb]);
-            } else {
-                setBreadcrumb([{ id: null, name: "Drive" }]);
-            }
-        } catch (e) {
+            setBreadcrumb(
+                folderId && data.breadcrumb
+                    ? [{ id: null, name: "Drive" }, ...data.breadcrumb]
+                    : [{ id: null, name: "Drive" }],
+            );
+        } catch {
             setError("Impossible de charger le contenu.");
         } finally {
             setLoading(false);
         }
     }, [folderId]);
 
-    useEffect(() => { load(); }, [load]);
+    useEffect(() => {
+        const t = setTimeout(load, 0);
+        return () => clearTimeout(t);
+    }, [load]);
 
     function navigate(id: string | null) {
         const params = new URLSearchParams(searchParams.toString());
-        if (id) {
-            params.set("folder", id);
-        } else {
-            params.delete("folder");
-        }
+        if (id) params.set("folder", id);
+        else params.delete("folder");
         router.push(`/drive?${params.toString()}`);
     }
 
     async function createFolder(name: string) {
         setShowNewFolder(false);
+        setActionError(null);
         const res = await fetch("/api/drive/folders", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -79,28 +79,24 @@ export function DriveClient() {
         });
         if (res.ok) load();
         else {
-            const data = await res.json();
-            alert(data.error ?? "Erreur lors de la création du dossier.");
+            const data = await res.json().catch(() => ({}));
+            setActionError(data.error ?? "Erreur lors de la création du dossier.");
         }
     }
 
-    async function deleteFolder(id: string) {
-        setMenu(null);
-        if (!confirm("Supprimer ce dossier et tout son contenu ?")) return;
-        await fetch(`/api/drive/folders/${id}`, { method: "DELETE" });
+    async function remove(target: Target) {
+        setDeleteTarget(null);
+        setActionError(null);
+        const url = target.type === "folder" ? `/api/drive/folders/${target.id}` : `/api/drive/files/${target.id}`;
+        const res = await fetch(url, { method: "DELETE" });
+        if (!res.ok) setActionError("Suppression impossible.");
         load();
     }
 
-    async function deleteFile(id: string) {
-        setMenu(null);
-        if (!confirm("Supprimer ce fichier ?")) return;
-        await fetch(`/api/drive/files/${id}`, { method: "DELETE" });
-        load();
-    }
-
-    async function rename(type: "folder" | "file", id: string, name: string) {
+    async function rename(target: Target, name: string) {
         setRenameTarget(null);
-        const url = type === "folder" ? `/api/drive/folders/${id}` : `/api/drive/files/${id}`;
+        setActionError(null);
+        const url = target.type === "folder" ? `/api/drive/folders/${target.id}` : `/api/drive/files/${target.id}`;
         const res = await fetch(url, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -108,155 +104,140 @@ export function DriveClient() {
         });
         if (res.ok) load();
         else {
-            const data = await res.json();
-            alert(data.error ?? "Erreur lors du renommage.");
+            const data = await res.json().catch(() => ({}));
+            setActionError(data.error ?? "Erreur lors du renommage.");
         }
     }
 
-    function openMenu(e: React.MouseEvent, type: "folder" | "file", id: string, name: string) {
+    function openMenu(e: React.MouseEvent, type: Target["type"], id: string, name: string) {
         setMenu({ x: e.clientX, y: e.clientY, type, id, name });
     }
 
-    const menuActions = menu
+    const menuActions: MenuAction[] = menu
         ? [
-              ...(menu.type === "folder"
-                  ? [{ label: "Ouvrir", onClick: () => navigate(menu.id) }]
-                  : [
-                        {
-                            label: "Télécharger",
-                            onClick: () => {
-                                window.location.href = `/api/drive/files/${menu.id}/download`;
-                            },
+              menu.type === "folder"
+                  ? { label: "Ouvrir", icon: FolderOpen, onClick: () => navigate(menu.id) }
+                  : {
+                        label: "Télécharger",
+                        icon: Download,
+                        onClick: () => {
+                            window.location.href = `/api/drive/files/${menu.id}/download`;
                         },
-                    ]),
-              {
-                  label: "Renommer",
-                  onClick: () => setRenameTarget({ type: menu.type, id: menu.id, name: menu.name }),
-              },
-              {
-                  label: "Supprimer",
-                  danger: true,
-                  onClick: () =>
-                      menu.type === "folder" ? deleteFolder(menu.id) : deleteFile(menu.id),
-              },
+                    },
+              { label: "Renommer", icon: Pencil, onClick: () => setRenameTarget(menu) },
+              { label: "Supprimer", icon: Trash2, danger: true, onClick: () => setDeleteTarget(menu) },
           ]
         : [];
 
     const isEmpty = !loading && folders.length === 0 && files.length === 0;
+    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
 
     return (
         <>
-            <div className="mt-10 sm:mt-12">
-                {/* Toolbar */}
-                <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                    <Breadcrumb crumbs={breadcrumb} onNavigate={navigate} />
-                    <button
-                        onClick={() => setShowNewFolder(true)}
-                        className="flex items-center gap-2 rounded-xl border border-hairline-strong bg-raised px-3 py-2 text-sm text-text-muted transition-colors hover:border-mauve/40 hover:text-mauve-text"
-                    >
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={1.5}
-                        >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                        </svg>
-                        Nouveau dossier
-                    </button>
-                </div>
+            <div className="mt-8 space-y-4">
+                <UploadZone folderId={folderId} onUploaded={load} />
 
-                {/* Séparateur */}
-                <div
-                    aria-hidden
-                    className="mb-5 h-px bg-gradient-to-r from-hairline-strong to-transparent"
-                />
+                {actionError && <ErrorBanner>{actionError}</ErrorBanner>}
 
-                {/* Upload zone */}
-                <div className="mb-6">
-                    <UploadZone folderId={folderId} onUploaded={load} />
-                </div>
-
-                {/* Contenu */}
-                {loading && (
-                    <div className="flex flex-col gap-2">
-                        {[...Array(4)].map((_, i) => (
-                            <div key={i} className="skeleton h-12 rounded-xl" />
-                        ))}
+                <section className="card overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-3 py-2.5">
+                        <Breadcrumb crumbs={breadcrumb} onNavigate={navigate} />
+                        <div className="flex items-center gap-3">
+                            {!loading && !isEmpty && (
+                                <span className="tabular hidden text-xs text-fg-subtle sm:inline">
+                                    {folders.length} dossier{folders.length > 1 ? "s" : ""} · {files.length} fichier
+                                    {files.length > 1 ? "s" : ""}
+                                    {totalSize > 0 && ` · ${(totalSize / 1024 / 1024).toFixed(1).replace(".", ",")} Mo`}
+                                </span>
+                            )}
+                            <button type="button" onClick={() => setShowNewFolder(true)} className="btn btn-secondary h-7 px-2.5 text-xs">
+                                <FolderPlus className="h-3.5 w-3.5" />
+                                Nouveau dossier
+                            </button>
+                        </div>
                     </div>
-                )}
 
-                {error && (
-                    <p className="text-sm text-down">{error}</p>
-                )}
-
-                {!loading && !error && isEmpty && (
-                    <div className="flex flex-col items-center gap-2 py-16 text-center text-text-muted">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className="h-12 w-12 opacity-30"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={1}
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
-                            />
-                        </svg>
-                        <p className="text-sm">Ce dossier est vide</p>
-                        <p className="text-xs">Uploadez des fichiers ou créez un sous-dossier.</p>
-                    </div>
-                )}
-
-                {!loading && !error && !isEmpty && (
-                    <div className="flex flex-col gap-1.5">
-                        {folders.map((folder) => (
-                            <FolderItem
-                                key={folder.id}
-                                folder={folder}
-                                onOpen={() => navigate(folder.id)}
-                                onMenu={(e) => openMenu(e, "folder", folder.id, folder.name)}
-                            />
-                        ))}
-                        {files.length > 0 && folders.length > 0 && (
-                            <div className="my-2 h-px bg-hairline" />
-                        )}
-                        {files.map((file) => (
-                            <FileItem
-                                key={file.id}
-                                file={file}
-                                onMenu={(e) => openMenu(e, "file", file.id, file.name)}
-                            />
-                        ))}
-                    </div>
-                )}
+                    {loading ? (
+                        <div className="divide-y divide-line">
+                            {[0, 1, 2, 3].map((i) => (
+                                <div key={i} className="flex items-center gap-3 px-4 py-3">
+                                    <Skeleton className="h-4 w-4" />
+                                    <Skeleton className="h-3.5 w-48" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : error ? (
+                        <div className="p-4">
+                            <ErrorBanner>{error}</ErrorBanner>
+                        </div>
+                    ) : isEmpty ? (
+                        <EmptyState icon={FolderOpen} title="Ce dossier est vide">
+                            Importe des fichiers ou crée un sous-dossier.
+                        </EmptyState>
+                    ) : (
+                        <>
+                            <DriveHeaderRow />
+                            <div className="divide-y divide-line">
+                                {folders.map((folder) => (
+                                    <FolderItem
+                                        key={folder.id}
+                                        folder={folder}
+                                        onOpen={() => navigate(folder.id)}
+                                        onMenu={(e) => openMenu(e, "folder", folder.id, folder.name)}
+                                    />
+                                ))}
+                                {files.map((file) => (
+                                    <FileItem
+                                        key={file.id}
+                                        file={file}
+                                        onMenu={(e) => openMenu(e, "file", file.id, file.name)}
+                                    />
+                                ))}
+                            </div>
+                        </>
+                    )}
+                </section>
             </div>
 
-            {showNewFolder && (
-                <NewFolderDialog onConfirm={createFolder} onClose={() => setShowNewFolder(false)} />
-            )}
+            {showNewFolder && <NewFolderDialog onConfirm={createFolder} onClose={() => setShowNewFolder(false)} />}
 
             {renameTarget && (
                 <RenameDialog
                     initialName={renameTarget.name}
-                    onConfirm={(name) => rename(renameTarget.type, renameTarget.id, name)}
+                    onConfirm={(name) => rename(renameTarget, name)}
                     onClose={() => setRenameTarget(null)}
                 />
             )}
 
-            {menu && (
-                <ContextMenu
-                    x={menu.x}
-                    y={menu.y}
-                    actions={menuActions}
-                    onClose={() => setMenu(null)}
-                />
+            {deleteTarget && (
+                <Dialog
+                    title={deleteTarget.type === "folder" ? "Supprimer le dossier ?" : "Supprimer le fichier ?"}
+                    description={
+                        <>
+                            <span className="font-medium text-fg">{deleteTarget.name}</span>
+                            {deleteTarget.type === "folder"
+                                ? " et tout son contenu seront définitivement supprimés."
+                                : " sera définitivement supprimé."}
+                        </>
+                    }
+                    onClose={() => setDeleteTarget(null)}
+                    footer={
+                        <>
+                            <button type="button" onClick={() => setDeleteTarget(null)} className="btn btn-secondary">
+                                Annuler
+                            </button>
+                            <button type="button" onClick={() => remove(deleteTarget)} className="btn btn-danger">
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Supprimer
+                            </button>
+                        </>
+                    }
+                >
+                    <p className="text-[13px] text-fg-muted">Cette action est irréversible.</p>
+                </Dialog>
             )}
+
+            {menu && <ContextMenu x={menu.x} y={menu.y} actions={menuActions} onClose={() => setMenu(null)} />}
         </>
     );
 }

@@ -1,37 +1,70 @@
 "use client";
 
+import type { LucideIcon } from "lucide-react";
+import {
+    File,
+    FileArchive,
+    FileAudio,
+    FileCode,
+    FileImage,
+    FileSpreadsheet,
+    FileText,
+    FileVideo,
+    Folder,
+    MoreHorizontal,
+} from "lucide-react";
+import { formatDate } from "@/lib/format";
+
 type FolderEntry = { id: string; name: string; createdAt: string; updatedAt: string };
 type FileEntry = { id: string; name: string; size: number; mimeType: string; createdAt: string };
 
 function formatSize(bytes: number) {
     if (bytes < 1024) return `${bytes} o`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} Go`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace(".", ",")} Ko`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} Mo`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2).replace(".", ",")} Go`;
 }
 
-function FolderIcon({ className }: { className?: string }) {
+function fileIcon(mime: string, name: string): { icon: LucideIcon; color: string } {
+    if (mime.startsWith("image/")) return { icon: FileImage, color: "text-info" };
+    if (mime.startsWith("video/")) return { icon: FileVideo, color: "text-down" };
+    if (mime.startsWith("audio/")) return { icon: FileAudio, color: "text-warn" };
+    if (mime === "application/pdf") return { icon: FileText, color: "text-down" };
+    if (/zip|tar|gzip|rar|7z/.test(mime)) return { icon: FileArchive, color: "text-warn" };
+    if (/sheet|excel|csv/.test(mime)) return { icon: FileSpreadsheet, color: "text-ok" };
+    if (/json|javascript|typescript|html|css|xml|x-sh/.test(mime) || /\.(ts|tsx|js|py|sh|yml|yaml)$/.test(name))
+        return { icon: FileCode, color: "text-accent-fg" };
+    if (mime.startsWith("text/") || /word|document/.test(mime)) return { icon: FileText, color: "text-fg-muted" };
+    return { icon: File, color: "text-fg-subtle" };
+}
+
+function MenuButton({ onMenu }: { onMenu: (e: React.MouseEvent) => void }) {
     return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-            <path d="M19.5 21a3 3 0 003-3v-4.5a3 3 0 00-3-3h-15a3 3 0 00-3 3V18a3 3 0 003 3h15zM1.5 10.146V6a3 3 0 013-3h5.379a2.25 2.25 0 011.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 013 3v1.146A4.483 4.483 0 0019.5 9h-15a4.483 4.483 0 00-3 1.146z" />
-        </svg>
+        <button
+            type="button"
+            onClick={(e) => {
+                e.stopPropagation();
+                onMenu(e);
+            }}
+            aria-label="Actions"
+            className="btn btn-ghost h-7 w-7 px-0 opacity-100 group-hover:opacity-100 sm:opacity-0 sm:focus:opacity-100"
+        >
+            <MoreHorizontal className="h-4 w-4" />
+        </button>
     );
 }
 
-function FileIcon({ className }: { className?: string }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-            <path d="M5.625 1.5c-1.036 0-1.875.84-1.875 1.875v17.25c0 1.035.84 1.875 1.875 1.875h12.75c1.035 0 1.875-.84 1.875-1.875V12.75A3.75 3.75 0 0016.5 9h-1.875a1.875 1.875 0 01-1.875-1.875V5.25A3.75 3.75 0 009 1.5H5.625z" />
-            <path d="M12.971 1.816A5.23 5.23 0 0114.25 5.25v1.875c0 .207.168.375.375.375H16.5a5.23 5.23 0 013.434 1.279 9.768 9.768 0 00-6.963-6.963z" />
-        </svg>
-    );
-}
+const rowClass =
+    "group grid grid-cols-[1fr_auto] items-center gap-4 px-4 py-2 text-[13px] transition-colors hover:bg-elevated/50 sm:grid-cols-[1fr_6rem_8rem_2rem]";
 
-function DotsIcon({ className }: { className?: string }) {
+export function DriveHeaderRow() {
     return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-            <path fillRule="evenodd" d="M4.5 12a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm6 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm6 0a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" clipRule="evenodd" />
-        </svg>
+        <div className="hidden grid-cols-[1fr_6rem_8rem_2rem] gap-4 border-b border-line px-4 py-2.5 text-xs font-medium text-fg-subtle sm:grid">
+            <span>Nom</span>
+            <span className="text-right">Taille</span>
+            <span className="text-right">Ajouté le</span>
+            <span />
+        </div>
     );
 }
 
@@ -46,21 +79,21 @@ export function FolderItem({
 }) {
     return (
         <div
-            onDoubleClick={onOpen}
-            onContextMenu={(e) => { e.preventDefault(); onMenu(e); }}
-            className="group flex cursor-pointer items-center gap-3 rounded-xl border border-hairline bg-raised px-4 py-3 transition-colors hover:border-hairline-strong hover:bg-glass"
+            onContextMenu={(e) => {
+                e.preventDefault();
+                onMenu(e);
+            }}
+            className={rowClass}
         >
-            <FolderIcon className="h-5 w-5 shrink-0 text-gold" />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-main">
-                {folder.name}
-            </span>
-            <button
-                onClick={(e) => { e.stopPropagation(); onMenu(e); }}
-                aria-label="Options"
-                className="shrink-0 rounded-lg p-1 text-text-muted opacity-0 transition-opacity hover:bg-glass hover:text-text-main group-hover:opacity-100"
-            >
-                <DotsIcon className="h-4 w-4" />
+            <button type="button" onClick={onOpen} className="flex min-w-0 items-center gap-3 text-left">
+                <Folder className="h-4 w-4 shrink-0 fill-accent/20 text-accent-fg" strokeWidth={1.75} />
+                <span className="truncate font-medium text-fg hover:underline">{folder.name}</span>
             </button>
+            <span className="hidden text-right text-xs text-fg-subtle sm:block">—</span>
+            <span className="tabular hidden text-right text-xs text-fg-muted sm:block">
+                {formatDate(new Date(folder.createdAt))}
+            </span>
+            <MenuButton onMenu={onMenu} />
         </div>
     );
 }
@@ -72,25 +105,28 @@ export function FileItem({
     file: FileEntry;
     onMenu: (e: React.MouseEvent) => void;
 }) {
+    const { icon: Icon, color } = fileIcon(file.mimeType, file.name);
     return (
         <div
-            onContextMenu={(e) => { e.preventDefault(); onMenu(e); }}
-            className="group flex cursor-default items-center gap-3 rounded-xl border border-hairline bg-raised px-4 py-3 transition-colors hover:border-hairline-strong hover:bg-glass"
+            onContextMenu={(e) => {
+                e.preventDefault();
+                onMenu(e);
+            }}
+            className={rowClass}
         >
-            <FileIcon className="h-5 w-5 shrink-0 text-mauve-text" />
-            <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-main">
-                {file.name}
-            </span>
-            <span className="shrink-0 font-mono text-[11px] text-text-muted">
-                {formatSize(file.size)}
-            </span>
-            <button
-                onClick={(e) => { e.stopPropagation(); onMenu(e); }}
-                aria-label="Options"
-                className="shrink-0 rounded-lg p-1 text-text-muted opacity-0 transition-opacity hover:bg-glass hover:text-text-main group-hover:opacity-100"
+            <a
+                href={`/api/drive/files/${file.id}/download`}
+                className="flex min-w-0 items-center gap-3"
+                title="Télécharger"
             >
-                <DotsIcon className="h-4 w-4" />
-            </button>
+                <Icon className={`h-4 w-4 shrink-0 ${color}`} strokeWidth={1.75} />
+                <span className="truncate text-fg hover:underline">{file.name}</span>
+            </a>
+            <span className="tabular hidden text-right text-xs text-fg-muted sm:block">{formatSize(file.size)}</span>
+            <span className="tabular hidden text-right text-xs text-fg-muted sm:block">
+                {formatDate(new Date(file.createdAt))}
+            </span>
+            <MenuButton onMenu={onMenu} />
         </div>
     );
 }

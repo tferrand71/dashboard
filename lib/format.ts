@@ -1,3 +1,28 @@
+/** Octets → « 1,8 Go », « 512 Mo » (unités françaises). */
+export function formatBytes(bytes: number): string {
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1).replace(".", ",")} Go`;
+    if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} Mo`;
+    if (bytes >= 1024) return `${Math.round(bytes / 1024)} Ko`;
+    return `${bytes} o`;
+}
+
+export function formatPercent(value: number, digits = 1): string {
+    return `${value.toFixed(digits).replace(".", ",")} %`;
+}
+
+const relative = new Intl.RelativeTimeFormat("fr-FR", { numeric: "auto" });
+
+/** « il y a 3 minutes », « hier » — pour les dates de déploiement. */
+export function timeAgo(input: string | Date, now: Date = new Date()): string {
+    const seconds = Math.round((new Date(input).getTime() - now.getTime()) / 1000);
+    const abs = Math.abs(seconds);
+    if (abs < 45) return "à l'instant";
+    if (abs < 3600) return relative.format(Math.round(seconds / 60), "minute");
+    if (abs < 86400) return relative.format(Math.round(seconds / 3600), "hour");
+    if (abs < 86400 * 30) return relative.format(Math.round(seconds / 86400), "day");
+    return formatDate(new Date(input));
+}
+
 /** « 3 j 4 h », « 12 min » — unités françaises, pas de décimales inutiles. */
 export function formatDuration(totalSeconds: number): string {
     if (totalSeconds < 60) return `${totalSeconds} s`;

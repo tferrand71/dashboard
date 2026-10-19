@@ -1,63 +1,88 @@
+import { Database, ShieldCheck, Timer } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { getDatabaseStatus, getProcessInfo } from "@/lib/infra";
 import { formatDuration } from "@/lib/format";
-import { DatabaseIcon, PulseIcon, ShieldIcon } from "./icons";
-import { StatusTile, StatusTileSkeleton } from "./status-tile";
+import { Badge, Panel, Skeleton, type Tone } from "./ui";
+
+function Row({
+    icon: Icon,
+    label,
+    detail,
+    tone,
+    status,
+}: {
+    icon: LucideIcon;
+    label: string;
+    detail: string;
+    tone: Tone;
+    status: string;
+}) {
+    return (
+        <li className="flex items-center gap-3 px-4 py-3">
+            <Icon className="h-4 w-4 shrink-0 text-fg-subtle" strokeWidth={1.75} />
+            <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-medium text-fg">{label}</p>
+                <p className="truncate text-xs text-fg-subtle" title={detail}>
+                    {detail}
+                </p>
+            </div>
+            <Badge tone={tone} dot>
+                {status}
+            </Badge>
+        </li>
+    );
+}
 
 /**
- * Trois faits vérifiables, rien de plus : la session en cours, un vrai
- * aller-retour vers PostgreSQL, et l'état du processus qui rend cette page.
+ * Trois faits vérifiés au rendu : la session, un vrai aller-retour vers
+ * PostgreSQL, et le processus qui sert cette page.
  */
 export async function ServiceHealth({ email }: { email: string }) {
     const database = await getDatabaseStatus();
     const runtime = getProcessInfo();
 
     return (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <StatusTile
-                label="Session"
-                state="ok"
-                value="Authentifié"
-                icon={ShieldIcon}
-                detail={<span className="break-all">{email}</span>}
-            />
-
-            {database.state === "up" ? (
-                <StatusTile
-                    label="PostgreSQL"
-                    state="ok"
-                    value="Connectée"
-                    icon={DatabaseIcon}
-                    detail={`${database.latencyMs} ms · ${database.projectCount} projet${
-                        database.projectCount === 1 ? "" : "s"
-                    }`}
+        <Panel title="Console" description="Vérifié au chargement de la page">
+            <ul className="divide-y divide-line">
+                <Row icon={ShieldCheck} label="Session" detail={email} tone="ok" status="Authentifié" />
+                {database.state === "up" ? (
+                    <Row
+                        icon={Database}
+                        label="PostgreSQL"
+                        detail={`${database.latencyMs} ms aller-retour`}
+                        tone="ok"
+                        status="Connectée"
+                    />
+                ) : (
+                    <Row icon={Database} label="PostgreSQL" detail={database.message} tone="down" status="Injoignable" />
+                )}
+                <Row
+                    icon={Timer}
+                    label="Processus"
+                    detail={`node ${runtime.nodeVersion} · ${runtime.environment}`}
+                    tone="neutral"
+                    status={formatDuration(runtime.uptimeSeconds)}
                 />
-            ) : (
-                <StatusTile
-                    label="PostgreSQL"
-                    state="down"
-                    value="Injoignable"
-                    icon={DatabaseIcon}
-                    detail={<span className="break-words">{database.message}</span>}
-                />
-            )}
-
-            <StatusTile
-                label="Processus dashboard"
-                state="neutral"
-                value={`Actif ${formatDuration(runtime.uptimeSeconds)}`}
-                icon={PulseIcon}
-                detail={`node ${runtime.nodeVersion} · ${runtime.environment}`}
-            />
-        </div>
+            </ul>
+        </Panel>
     );
 }
 
 export function ServiceHealthSkeleton() {
     return (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <StatusTileSkeleton />
-            <StatusTileSkeleton />
-            <StatusTileSkeleton />
-        </div>
+        <Panel title="Console">
+            <div className="divide-y divide-line">
+                {[0, 1, 2].map((i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3">
+                        <Skeleton className="h-4 w-4" />
+                        <div className="flex-1 space-y-1.5">
+                            <Skeleton className="h-3 w-20" />
+                            <Skeleton className="h-2.5 w-32" />
+                        </div>
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                ))}
+            </div>
+        </Panel>
     );
 }

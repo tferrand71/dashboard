@@ -2,14 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { signOut } from "next-auth/react";
-import { LogoutIcon } from "./icons";
+import { LogOut } from "lucide-react";
 
-type Props = {
-    /** `icon` pour la barre mobile, `full` pour le pied de sidebar. */
-    variant?: "full" | "icon";
-};
-
-export function SignOutButton({ variant = "full" }: Props) {
+export function SignOutButton() {
     const [isPending, startTransition] = useTransition();
     const [failed, setFailed] = useState(false);
 
@@ -26,38 +21,25 @@ export function SignOutButton({ variant = "full" }: Props) {
         });
     };
 
-    if (variant === "icon") {
-        return (
+    return (
+        <>
             <button
                 type="button"
                 onClick={handleSignOut}
                 disabled={isPending}
-                className="flex h-9 w-9 items-center justify-center rounded-xl border border-hairline text-text-muted transition-colors hover:border-down/40 hover:text-down disabled:opacity-50"
+                title="Se déconnecter"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-fg-subtle transition-colors hover:bg-elevated hover:text-down disabled:opacity-50"
             >
-                <LogoutIcon className="h-4 w-4" />
+                <LogOut className="h-4 w-4" />
                 <span className="sr-only">
                     {isPending ? "Déconnexion en cours" : "Se déconnecter"}
                 </span>
             </button>
-        );
-    }
-
-    return (
-        <div>
-            <button
-                type="button"
-                onClick={handleSignOut}
-                disabled={isPending}
-                className="flex w-full items-center gap-2.5 rounded-xl border border-hairline px-3 py-2 text-xs font-medium text-text-muted transition-colors hover:border-down/40 hover:text-down disabled:opacity-50"
-            >
-                <LogoutIcon className="h-4 w-4" />
-                {isPending ? "Déconnexion…" : "Se déconnecter"}
-            </button>
             {failed && (
-                <p role="alert" className="mt-2 text-[11px] text-down">
+                <p role="alert" className="text-[11px] text-down">
                     Déconnexion impossible. Réessaie.
                 </p>
             )}
-        </div>
+        </>
     );
 }

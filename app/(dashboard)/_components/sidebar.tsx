@@ -3,85 +3,107 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Brand } from "./brand";
-import { navItems } from "./nav-items";
+import { isActive, navGroups } from "./nav-items";
 import { SignOutButton } from "./sign-out-button";
 
-/** Navigation desktop (lg+). Sur mobile c'est `MobileNav` qui prend le relais. */
-export function Sidebar({ email }: { email: string }) {
+/** Liste de navigation, partagée par la sidebar desktop et le tiroir mobile. */
+export function NavList({ onNavigate }: { onNavigate?: () => void }) {
     const pathname = usePathname();
 
     return (
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-hairline bg-ink/80 backdrop-blur-xl lg:flex">
-            <div className="px-5 py-6">
+        <nav aria-label="Navigation principale" className="flex flex-col gap-5">
+            {navGroups.map((group) => (
+                <div key={group.label}>
+                    <p className="mb-1 px-2 text-[11px] font-medium text-fg-subtle">{group.label}</p>
+                    <ul className="flex flex-col gap-px">
+                        {group.items.map(({ label, href, icon: Icon, available }) => {
+                            if (!available) {
+                                return (
+                                    <li key={href}>
+                                        {/* Pas un lien : la route n'existe pas encore. */}
+                                        <span
+                                            aria-disabled="true"
+                                            className="flex h-8 cursor-not-allowed items-center gap-2.5 rounded-md px-2 text-[13px] text-fg-subtle/70"
+                                        >
+                                            <Icon className="h-4 w-4 shrink-0" strokeWidth={1.75} />
+                                            <span className="flex-1">{label}</span>
+                                            <span className="rounded border border-line px-1.5 text-[10px]">
+                                                Bientôt
+                                            </span>
+                                        </span>
+                                    </li>
+                                );
+                            }
+
+                            const active = isActive(pathname, href);
+                            return (
+                                <li key={href}>
+                                    <Link
+                                        href={href}
+                                        onClick={onNavigate}
+                                        aria-current={active ? "page" : undefined}
+                                        className={`relative flex h-8 items-center gap-2.5 rounded-md px-2 text-[13px] transition-colors ${
+                                            active
+                                                ? "bg-gradient-to-r from-accent/20 to-accent/5 font-medium text-fg shadow-[inset_0_0_0_1px_rgba(139,92,246,0.3)]"
+                                                : "text-fg-muted hover:bg-accent/10 hover:text-fg"
+                                        }`}
+                                    >
+                                        {active && (
+                                            <span
+                                                aria-hidden="true"
+                                                className="absolute -left-3 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent shadow-[0_0_10px_var(--color-accent)]"
+                                            />
+                                        )}
+                                        <Icon
+                                            className={`h-4 w-4 shrink-0 ${active ? "text-accent-fg" : ""}`}
+                                            strokeWidth={1.75}
+                                        />
+                                        {label}
+                                    </Link>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </div>
+            ))}
+        </nav>
+    );
+}
+
+export function UserCard({ email }: { email: string }) {
+    return (
+        <div className="flex items-center gap-2.5 rounded-md p-1.5">
+            <span
+                aria-hidden="true"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent/40 to-pink/30 text-[11px] font-semibold uppercase text-fg ring-1 ring-accent/40"
+            >
+                {email.slice(0, 1)}
+            </span>
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-medium text-fg">Administrateur</p>
+                <p className="truncate text-[11px] text-fg-subtle" title={email}>
+                    {email}
+                </p>
+            </div>
+            <SignOutButton />
+        </div>
+    );
+}
+
+/** Navigation desktop (lg+). Sous lg, la barre du haut ouvre un tiroir. */
+export function Sidebar({ email }: { email: string }) {
+    return (
+        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface/60 backdrop-blur-xl lg:flex">
+            <div className="flex h-14 items-center border-b border-line px-4">
                 <Brand />
             </div>
 
-            <nav aria-label="Navigation principale" className="flex-1 px-3">
-                <p className="eyebrow mb-3 px-3">Modules</p>
-                <ul className="flex flex-col gap-1">
-                    {navItems.map(({ label, href, icon: Icon, available }) => {
-                        const isActive = pathname === href;
+            <div className="flex-1 overflow-y-auto px-3 py-4">
+                <NavList />
+            </div>
 
-                        if (!available) {
-                            return (
-                                <li key={href}>
-                                    {/* Pas un lien : la route n'existe pas encore. */}
-                                    <span
-                                        aria-disabled="true"
-                                        className="flex cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-text-muted/60"
-                                    >
-                                        <Icon className="h-5 w-5 shrink-0" />
-                                        <span className="flex-1">{label}</span>
-                                        <span className="rounded-full border border-hairline px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider">
-                                            Bientôt
-                                        </span>
-                                    </span>
-                                </li>
-                            );
-                        }
-
-                        return (
-                            <li key={href}>
-                                <Link
-                                    href={href}
-                                    aria-current={isActive ? "page" : undefined}
-                                    className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
-                                        isActive
-                                            ? "bg-glass text-text-main"
-                                            : "text-text-muted hover:bg-glass/60 hover:text-text-main"
-                                    }`}
-                                >
-                                    {/* Liseré or : marqueur d'état actif du portfolio. */}
-                                    <span
-                                        aria-hidden="true"
-                                        className={`absolute left-0 top-1/2 h-5 w-[2px] -translate-y-1/2 rounded-full bg-gold transition-opacity ${
-                                            isActive ? "opacity-100" : "opacity-0"
-                                        }`}
-                                    />
-                                    <Icon
-                                        className={`h-5 w-5 shrink-0 transition-colors ${
-                                            isActive
-                                                ? "text-gold"
-                                                : "group-hover:text-mauve-text"
-                                        }`}
-                                    />
-                                    <span className="font-medium">{label}</span>
-                                </Link>
-                            </li>
-                        );
-                    })}
-                </ul>
-            </nav>
-
-            <div className="border-t border-hairline p-4">
-                <p className="eyebrow mb-1.5">Session</p>
-                <p
-                    className="mb-3 truncate font-mono text-[11px] text-text-muted"
-                    title={email}
-                >
-                    {email}
-                </p>
-                <SignOutButton />
+            <div className="border-t border-line p-2">
+                <UserCard email={email} />
             </div>
         </aside>
     );

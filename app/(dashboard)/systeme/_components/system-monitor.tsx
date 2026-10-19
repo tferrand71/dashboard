@@ -1,253 +1,209 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useMemo, useState } from "react";
+import { ArrowDownUp, Container, Cpu, HardDrive, MemoryStick, Search } from "lucide-react";
+import type { AgentProject, ContainerStats } from "@/lib/agent";
+import { containerLabel, isEphemeral, level } from "@/lib/agent";
+import { formatBytes, formatPercent } from "@/lib/format";
+import { hostCards, MetricCard, useContainers, useHostStats } from "../../_components/live-metrics";
+import { Badge, EmptyState, ErrorBanner, LiveIndicator, Meter, Panel, Skeleton, toneTextClass } from "../../_components/ui";
+import { usePoll } from "../../_components/use-poll";
 
-interface HostStats {
-  cpu: { percent: number };
-  memory: { totalKb: number; usedKb: number; availableKb: number; percent: number };
-  disk: { totalKb: number; usedKb: number; availableKb: number; percent: number };
+/** « Up 2 hours (healthy) » → { uptime: "2 h", health: "healthy" } */
+function parseStatus(status: string): { running: boolean; uptime: string; health: string | null } {
+    const health = status.match(/\((healthy|unhealthy|health: starting)\)/)?.[1] ?? null;
+    const running = status.startsWith("Up");
+    const uptime = status
+        .replace(/^Up\s+/, "")
+        .replace(/\s*\(.*\)\s*$/, "")
+        .replace(/^About an? /, "~1 ")
+        .replace(/Less than a second/, "< 1 s")
+        .replace(/\bseconds?\b/, "s")
+        .replace(/\bminutes?\b/, "min")
+        .replace(/\bhours?\b/, "h")
+        .replace(/\bdays?\b/, "j")
+        .replace(/\bweeks?\b/, "sem.")
+        .replace(/\bmonths?\b/, "mois");
+    return { running, uptime, health };
 }
 
-interface ContainerStats {
-  id: string;
-  name: string;
-  image: string;
-  status: string;
-  cpu: { percent: number };
-  memory: { usedBytes: number; limitBytes: number; percent: number };
-}
+type SortKey = "name" | "cpu" | "memory";
 
-function fmtBytes(bytes: number): string {
-  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(1)} Go`;
-  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(0)} Mo`;
-  return `${(bytes / 1024).toFixed(0)} Ko`;
-}
-
-function fmtKb(kb: number): string {
-  return fmtBytes(kb * 1024);
-}
-
-function GaugeBar({ percent, label }: { percent: number; label: string }) {
-  const color =
-    percent >= 90
-      ? "bg-down"
-      : percent >= 70
-        ? "bg-warn"
-        : "bg-ok";
-
-  return (
-    <div className="mt-2">
-      <div className="mb-1 flex justify-between font-mono text-[11px] text-text-muted">
-        <span>{label}</span>
-        <span className={percent >= 90 ? "text-down" : percent >= 70 ? "text-warn" : "text-ok"}>
-          {percent.toFixed(1)}%
-        </span>
-      </div>
-      <div className="h-1.5 w-full overflow-hidden rounded-full bg-hairline-strong">
-        <div
-          className={`h-full rounded-full transition-all duration-700 ${color}`}
-          style={{ width: `${Math.min(percent, 100)}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function HostCard({ stats }: { stats: HostStats }) {
-  return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      {/* CPU */}
-      <div className="glass-panel rounded-2xl p-4 sm:p-5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">CPU</p>
-        <p className="mt-2 font-serif text-2xl font-bold tracking-tight text-text-main">
-          {stats.cpu.percent.toFixed(1)}%
-        </p>
-        <GaugeBar percent={stats.cpu.percent} label="utilisation" />
-      </div>
-
-      {/* RAM */}
-      <div className="glass-panel rounded-2xl p-4 sm:p-5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">RAM</p>
-        <p className="mt-2 font-serif text-2xl font-bold tracking-tight text-text-main">
-          {fmtKb(stats.memory.usedKb)}
-        </p>
-        <p className="font-mono text-[11px] text-text-muted">
-          sur {fmtKb(stats.memory.totalKb)}
-        </p>
-        <GaugeBar percent={stats.memory.percent} label="utilisée" />
-      </div>
-
-      {/* Disque */}
-      <div className="glass-panel rounded-2xl p-4 sm:p-5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted">Disque</p>
-        <p className="mt-2 font-serif text-2xl font-bold tracking-tight text-text-main">
-          {fmtKb(stats.disk.usedKb)}
-        </p>
-        <p className="font-mono text-[11px] text-text-muted">
-          sur {fmtKb(stats.disk.totalKb)}
-        </p>
-        <GaugeBar percent={stats.disk.percent} label="utilisé" />
-      </div>
-    </div>
-  );
-}
-
-function ContainerRow({ c }: { c: ContainerStats }) {
-  const cpuColor =
-    c.cpu.percent >= 80 ? "text-down" : c.cpu.percent >= 50 ? "text-warn" : "text-ok";
-  const memColor =
-    c.memory.percent >= 80 ? "text-down" : c.memory.percent >= 50 ? "text-warn" : "text-ok";
-
-  return (
-    <div className="glass-panel flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl px-4 py-3">
-      {/* Nom */}
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-text-main">{c.name}</p>
-        <p className="truncate font-mono text-[11px] text-text-muted">{c.image}</p>
-      </div>
-
-      {/* Statut */}
-      <span className="rounded-full border border-hairline-strong px-2 py-0.5 font-mono text-[10px] text-text-muted">
-        {c.status}
-      </span>
-
-      {/* CPU */}
-      <div className="text-right">
-        <p className="font-mono text-[11px] text-text-muted">CPU</p>
-        <p className={`font-mono text-sm font-bold ${cpuColor}`}>
-          {c.cpu.percent.toFixed(1)}%
-        </p>
-      </div>
-
-      {/* RAM */}
-      <div className="text-right">
-        <p className="font-mono text-[11px] text-text-muted">RAM</p>
-        <p className={`font-mono text-sm font-bold ${memColor}`}>
-          {fmtBytes(c.memory.usedBytes)}
-          {c.memory.limitBytes > 0 && (
-            <span className="font-normal text-text-muted">
-              {" "}/ {fmtBytes(c.memory.limitBytes)}
-            </span>
-          )}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function SkeletonCard() {
-  return (
-    <div className="glass-panel rounded-2xl p-4 sm:p-5">
-      <div className="skeleton h-3 w-12 rounded-full" />
-      <div className="skeleton mt-3 h-6 w-24 rounded-md" />
-      <div className="skeleton mt-2 h-2 w-full rounded-full" />
-    </div>
-  );
+function ContainerTable({ rows, projects }: { rows: ContainerStats[]; projects: AgentProject[] }) {
+    return (
+        <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px]">
+                <thead className="text-xs text-fg-subtle">
+                    <tr className="border-b border-line">
+                        <th scope="col" className="px-4 py-2.5 font-medium">Conteneur</th>
+                        <th scope="col" className="hidden px-4 py-2.5 font-medium md:table-cell">État</th>
+                        <th scope="col" className="w-28 px-4 py-2.5 text-right font-medium sm:w-40">CPU</th>
+                        <th scope="col" className="w-32 px-4 py-2.5 text-right font-medium sm:w-48">Mémoire</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                    {rows.map((c) => {
+                        const s = parseStatus(c.status);
+                        const label = containerLabel(c, projects);
+                        const memTone = level(c.memory.percent);
+                        const cpuTone = level(c.cpu.percent);
+                        return (
+                            <tr key={c.id} className="transition-colors hover:bg-elevated/50">
+                                <td className="max-w-0 px-4 py-3">
+                                    <p className="truncate font-medium text-fg" title={c.name}>
+                                        {label}
+                                    </p>
+                                    <p className="truncate font-mono text-xs text-fg-subtle" title={c.image}>
+                                        {c.image.startsWith("sha256:")
+                                            ? `couche ${c.image.slice(7, 19)}`
+                                            : c.image.startsWith("deploy-agent/")
+                                              ? `deploy-agent · ${projects.find((p) => c.name === `project-${p.id}`)?.subdomain ?? c.image}`
+                                              : c.image}
+                                    </p>
+                                </td>
+                                <td className="hidden whitespace-nowrap px-4 py-3 md:table-cell">
+                                    <div className="flex items-center gap-2">
+                                        <Badge tone={s.running ? "ok" : "neutral"} dot>
+                                            {s.running ? "Actif" : "Arrêté"}
+                                        </Badge>
+                                        {s.health === "healthy" && <Badge tone="ok">sain</Badge>}
+                                        {s.health === "unhealthy" && <Badge tone="down">défaillant</Badge>}
+                                        <span className="tabular text-xs text-fg-subtle">{s.uptime}</span>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <div className="flex items-center justify-end gap-3">
+                                        <span className="hidden w-16 sm:block">
+                                            <Meter percent={c.cpu.percent} tone={cpuTone} />
+                                        </span>
+                                        <span className={`tabular w-14 text-right text-xs ${cpuTone === "ok" ? "text-fg-muted" : toneTextClass(cpuTone)}`}>
+                                            {formatPercent(c.cpu.percent)}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                    <div className="flex items-center justify-end gap-3">
+                                        <span className="hidden w-16 sm:block">
+                                            <Meter percent={c.memory.percent} tone={memTone} />
+                                        </span>
+                                        <span className="tabular w-16 text-right text-xs text-fg-muted">
+                                            {formatBytes(c.memory.usedBytes)}
+                                        </span>
+                                    </div>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
 }
 
 export function SystemMonitor() {
-  const [host, setHost] = useState<HostStats | null>(null);
-  const [containers, setContainers] = useState<ContainerStats[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const host = useHostStats();
+    const containers = useContainers(5000);
+    const projects = usePoll<AgentProject[]>("/api/deploy/projects", 30000);
+    const [query, setQuery] = useState("");
+    const [sort, setSort] = useState<SortKey>("memory");
 
-  const fetch$ = useCallback(async () => {
-    try {
-      const [hostRes, containersRes] = await Promise.all([
-        fetch("/api/deploy/system/host"),
-        fetch("/api/deploy/system/containers"),
-      ]);
-      if (!hostRes.ok || !containersRes.ok) throw new Error("Réponse inattendue");
-      const [hostData, containersData] = await Promise.all([
-        hostRes.json(),
-        containersRes.json(),
-      ]);
-      setHost(hostData);
-      setContainers(containersData);
-      setLastUpdated(new Date());
-      setError(null);
-    } catch {
-      setError("Impossible de joindre deploy-agent");
-    }
-  }, []);
+    const cards = hostCards(host.data, host.history);
 
-  useEffect(() => {
-    fetch$();
-    const id = setInterval(fetch$, 5000);
-    return () => clearInterval(id);
-  }, [fetch$]);
+    const { services, ephemeral } = useMemo(() => {
+        const list = projects.data ?? [];
+        const q = query.trim().toLowerCase();
+        const filtered = (containers.data ?? []).filter(
+            (c) => !q || `${c.name} ${c.image} ${containerLabel(c, list)}`.toLowerCase().includes(q),
+        );
+        const sorted = [...filtered].sort((a, b) =>
+            sort === "name"
+                ? containerLabel(a, list).localeCompare(containerLabel(b, list))
+                : sort === "cpu"
+                  ? b.cpu.percent - a.cpu.percent
+                  : b.memory.usedBytes - a.memory.usedBytes,
+        );
+        return { services: sorted.filter((c) => !isEphemeral(c)), ephemeral: sorted.filter(isEphemeral) };
+    }, [containers.data, projects.data, query, sort]);
 
-  return (
-    <div className="space-y-10">
-      {/* Host stats */}
-      <div>
-        <div className="mb-4 flex items-end justify-between">
-          <div>
-            <p className="eyebrow">Monitoring</p>
-            <h2 className="mt-1 font-serif text-lg font-bold tracking-tight text-text-main sm:text-xl">
-              Ressources VPS
-            </h2>
-          </div>
-          {lastUpdated && (
-            <p className="font-mono text-[11px] text-text-muted">
-              mis à jour {lastUpdated.toLocaleTimeString("fr-FR")}
-            </p>
-          )}
+    const totalMem = (containers.data ?? []).reduce((sum, c) => sum + c.memory.usedBytes, 0);
+    const sortLabel: Record<SortKey, string> = { memory: "Mémoire", cpu: "CPU", name: "Nom" };
+    const nextSort: Record<SortKey, SortKey> = { memory: "cpu", cpu: "name", name: "memory" };
+
+    return (
+        <div className="mt-8 space-y-6">
+            <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-fg">Ressources de l&apos;hôte</h2>
+                <LiveIndicator updatedAt={host.updatedAt} error={host.error} />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+                <MetricCard label="CPU" icon={Cpu} loading={!cards} {...(cards?.cpu ?? { value: "" })} />
+                <MetricCard label="Mémoire" icon={MemoryStick} loading={!cards} {...(cards?.memory ?? { value: "" })} />
+                <MetricCard label="Disque" icon={HardDrive} loading={!cards} {...(cards?.disk ?? { value: "" })} />
+            </div>
+
+            <Panel
+                title="Conteneurs Docker"
+                description={
+                    containers.data
+                        ? `${services.length} service${services.length > 1 ? "s" : ""} · ${formatBytes(totalMem)} de mémoire au total`
+                        : "Chargement…"
+                }
+                actions={
+                    <>
+                        <label className="relative hidden sm:block">
+                            <span className="sr-only">Filtrer les conteneurs</span>
+                            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-subtle" />
+                            <input
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                                placeholder="Filtrer…"
+                                className="input h-7 w-44 pl-8 text-xs"
+                            />
+                        </label>
+                        <button
+                            type="button"
+                            onClick={() => setSort(nextSort[sort])}
+                            className="btn btn-secondary h-7 px-2 text-xs"
+                            title="Changer le tri"
+                        >
+                            <ArrowDownUp className="h-3.5 w-3.5" />
+                            {sortLabel[sort]}
+                        </button>
+                    </>
+                }
+            >
+                {containers.error && !containers.data ? (
+                    <div className="p-4">
+                        <ErrorBanner>Impossible de joindre deploy-agent.</ErrorBanner>
+                    </div>
+                ) : !containers.data ? (
+                    <div className="divide-y divide-line">
+                        {[0, 1, 2, 3].map((i) => (
+                            <div key={i} className="flex items-center gap-4 px-4 py-3.5">
+                                <div className="flex-1 space-y-1.5">
+                                    <Skeleton className="h-3.5 w-36" />
+                                    <Skeleton className="h-3 w-52" />
+                                </div>
+                                <Skeleton className="h-3 w-20" />
+                            </div>
+                        ))}
+                    </div>
+                ) : services.length === 0 ? (
+                    <EmptyState icon={Container} title={query ? "Aucun résultat" : "Aucun conteneur actif"} />
+                ) : (
+                    <ContainerTable rows={services} projects={projects.data ?? []} />
+                )}
+            </Panel>
+
+            {ephemeral.length > 0 && (
+                <Panel
+                    title="Conteneurs temporaires"
+                    description="Étapes de build ou commandes ponctuelles : Docker leur donne un nom au hasard et les supprime à la fin."
+                >
+                    <ContainerTable rows={ephemeral} projects={projects.data ?? []} />
+                </Panel>
+            )}
         </div>
-        <div
-          aria-hidden="true"
-          className="mb-5 h-px bg-gradient-to-r from-hairline-strong to-transparent"
-        />
-
-        {error ? (
-          <p className="font-mono text-sm text-down">{error}</p>
-        ) : host ? (
-          <HostCard stats={host} />
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-3">
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </div>
-        )}
-      </div>
-
-      {/* Containers */}
-      <div>
-        <div className="mb-4 flex items-end justify-between">
-          <div>
-            <p className="eyebrow">Docker</p>
-            <h2 className="mt-1 font-serif text-lg font-bold tracking-tight text-text-main sm:text-xl">
-              Conteneurs actifs
-            </h2>
-          </div>
-          {containers && (
-            <p className="font-mono text-[11px] text-text-muted">
-              {containers.length} en cours
-            </p>
-          )}
-        </div>
-        <div
-          aria-hidden="true"
-          className="mb-5 h-px bg-gradient-to-r from-hairline-strong to-transparent"
-        />
-
-        {error ? null : containers === null ? (
-          <div className="space-y-2">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="glass-panel h-14 rounded-xl" />
-            ))}
-          </div>
-        ) : containers.length === 0 ? (
-          <p className="font-mono text-sm text-text-muted">Aucun conteneur actif.</p>
-        ) : (
-          <div className="space-y-2">
-            {containers.map((c) => (
-              <ContainerRow key={c.id} c={c} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
 }

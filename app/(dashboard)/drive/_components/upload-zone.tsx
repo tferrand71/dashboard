@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { CheckCircle2, CloudUpload, XCircle } from "lucide-react";
 
 type UploadProgress = { name: string; percent: number; done: boolean; error?: string };
 
@@ -36,18 +37,22 @@ export function UploadZone({
             };
 
             xhr.onload = () => {
-                setProgress((prev) => prev.map((p) => ({ ...p, percent: 100, done: true })));
-                setTimeout(() => {
-                    setProgress([]);
-                    onUploaded();
-                }, 800);
+                const failed = xhr.status >= 400;
+                setProgress((prev) =>
+                    prev.map((p) => ({ ...p, percent: 100, done: true, error: failed ? `Erreur ${xhr.status}` : undefined })),
+                );
+                setTimeout(
+                    () => {
+                        setProgress([]);
+                        onUploaded();
+                    },
+                    failed ? 3000 : 800,
+                );
                 resolve();
             };
 
             xhr.onerror = () => {
-                setProgress((prev) =>
-                    prev.map((p) => ({ ...p, done: true, error: "Erreur réseau" })),
-                );
+                setProgress((prev) => prev.map((p) => ({ ...p, done: true, error: "Erreur réseau" })));
                 resolve();
             };
 
@@ -55,78 +60,68 @@ export function UploadZone({
         });
     }
 
-    function onDragOver(e: React.DragEvent) {
-        e.preventDefault();
-        setDragging(true);
-    }
-    function onDragLeave() {
-        setDragging(false);
-    }
-    function onDrop(e: React.DragEvent) {
-        e.preventDefault();
-        setDragging(false);
-        if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
-    }
-
     return (
-        <div className="flex flex-col gap-3">
-            <div
-                onDragOver={onDragOver}
-                onDragLeave={onDragLeave}
-                onDrop={onDrop}
+        <div className="space-y-2">
+            <button
+                type="button"
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    setDragging(false);
+                    if (e.dataTransfer.files.length) uploadFiles(e.dataTransfer.files);
+                }}
                 onClick={() => inputRef.current?.click()}
-                className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-colors ${
+                className={`flex w-full items-center justify-center gap-3 rounded-lg border border-dashed px-4 py-5 text-[13px] transition-colors ${
                     dragging
-                        ? "border-mauve bg-mauve/5 text-mauve-text"
-                        : "border-hairline-strong text-text-muted hover:border-mauve/40 hover:text-text-main"
+                        ? "border-accent bg-accent/5 text-fg"
+                        : "border-line-strong text-fg-muted hover:border-fg-subtle hover:bg-elevated/40 hover:text-fg"
                 }`}
             >
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-8 w-8 opacity-60"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
-                >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"
-                    />
-                </svg>
-                <p className="text-sm font-medium">
-                    Glissez des fichiers ici ou{" "}
-                    <span className="text-mauve-text underline underline-offset-2">parcourez</span>
-                </p>
-                <input
-                    ref={inputRef}
-                    type="file"
-                    multiple
-                    className="sr-only"
-                    onChange={(e) => e.target.files && uploadFiles(e.target.files)}
-                />
-            </div>
+                <CloudUpload className="h-5 w-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
+                <span>
+                    Glisse des fichiers ici ou <span className="font-medium text-accent-fg">parcours ton ordinateur</span>
+                </span>
+            </button>
+            <input
+                ref={inputRef}
+                type="file"
+                multiple
+                className="sr-only"
+                tabIndex={-1}
+                onChange={(e) => e.target.files && uploadFiles(e.target.files)}
+            />
 
             {progress.length > 0 && (
-                <div className="flex flex-col gap-2">
+                <ul className="card divide-y divide-line">
                     {progress.map((p, i) => (
-                        <div key={i} className="rounded-xl border border-hairline bg-raised px-4 py-2">
-                            <div className="mb-1.5 flex items-center justify-between gap-2">
-                                <span className="truncate text-xs text-text-main">{p.name}</span>
-                                <span className="shrink-0 font-mono text-[10px] text-text-muted">
-                                    {p.error ? "Erreur" : p.done ? "✓" : `${p.percent}%`}
-                                </span>
+                        <li key={i} className="flex items-center gap-3 px-4 py-2.5">
+                            <div className="min-w-0 flex-1">
+                                <div className="mb-1.5 flex items-center justify-between gap-2">
+                                    <span className="truncate text-[13px] text-fg">{p.name}</span>
+                                    <span className="tabular shrink-0 text-xs text-fg-subtle">
+                                        {p.error ?? (p.done ? "Terminé" : `${p.percent} %`)}
+                                    </span>
+                                </div>
+                                <div className="h-1 w-full overflow-hidden rounded-full bg-line">
+                                    <div
+                                        className={`h-full rounded-full transition-all ${p.error ? "bg-down" : p.done ? "bg-ok" : "bg-accent"}`}
+                                        style={{ width: `${p.percent}%` }}
+                                    />
+                                </div>
                             </div>
-                            <div className="h-1 w-full overflow-hidden rounded-full bg-hairline-strong">
-                                <div
-                                    className={`h-full rounded-full transition-all ${p.error ? "bg-down" : "bg-mauve"}`}
-                                    style={{ width: `${p.percent}%` }}
-                                />
-                            </div>
-                        </div>
+                            {p.done &&
+                                (p.error ? (
+                                    <XCircle className="h-4 w-4 shrink-0 text-down" />
+                                ) : (
+                                    <CheckCircle2 className="h-4 w-4 shrink-0 text-ok" />
+                                ))}
+                        </li>
                     ))}
-                </div>
+                </ul>
             )}
         </div>
     );

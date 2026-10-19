@@ -1,98 +1,57 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { DeployButton, StatusBadge } from "./deploy-button";
+import { Boxes } from "lucide-react";
+import type { AgentProject } from "@/lib/agent";
+import { ProjectsTable } from "../../_components/projects-table";
+import { EmptyState, ErrorBanner, LiveIndicator, Panel, PROJECT_STATUS } from "../../_components/ui";
+import { usePoll } from "../../_components/use-poll";
+import { DeleteProjectButton } from "./delete-project-button";
+import { DeployButton } from "./deploy-button";
 import { ProjectForm } from "./project-form";
 
-type Project = {
-  id: string;
-  name: string;
-  subdomain: string;
-  branch: string;
-  lastCommit: string | null;
-  status: string;
-  updatedAt: string;
-};
-
 export function ProjectList() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+    // 5 s : le statut passe de « Build en cours » à « En ligne » sans recharger.
+    const { data, error, updatedAt, refresh } = usePoll<AgentProject[]>("/api/deploy/projects", 5000);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/deploy/projects");
-      if (!res.ok) throw new Error("Impossible de contacter deploy-agent");
-      setProjects(await res.json());
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur inconnue");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    const counts = Object.entries(PROJECT_STATUS)
+        .map(([status, { label }]) => ({ label, n: data?.filter((p) => p.status === status).length ?? 0 }))
+        .filter((c) => c.n > 0);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return (
-    <div className="space-y-5">
-      <div className="flex justify-end">
-        <ProjectForm onCreated={refresh} />
-      </div>
-
-      {loading && (
-        <div className="space-y-3">
-          {[0, 1].map((i) => (
-            <div
-              key={i}
-              className="glass-panel h-16 animate-pulse rounded-2xl"
-            />
-          ))}
-        </div>
-      )}
-
-      {error && (
-        <p className="rounded-xl border border-down/30 bg-down/10 px-4 py-3 text-sm text-down">
-          {error}
-        </p>
-      )}
-
-      {!loading && !error && projects.length === 0 && (
-        <p className="text-sm text-text-muted">
-          Aucun projet déployé pour l&apos;instant.
-        </p>
-      )}
-
-      {!loading && !error && projects.length > 0 && (
-        <ul className="space-y-3">
-          {projects.map((project) => (
-            <li
-              key={project.id}
-              className="glass-panel flex flex-wrap items-center justify-between gap-4 rounded-2xl px-5 py-4"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-3">
-                  <span className="font-serif text-sm font-bold text-text-main">
-                    {project.name}
-                  </span>
-                  <StatusBadge status={project.status} />
-                </div>
-                <p className="mt-0.5 truncate font-mono text-[10px] text-text-muted">
-                  {project.subdomain}
-                  {project.lastCommit && (
-                    <> · {project.lastCommit.slice(0, 7)}</>
-                  )}
+    return (
+        <div className="mt-8 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[13px] text-fg-muted">
+                    {data
+                        ? counts.map((c) => `${c.n} ${c.label.toLowerCase()}`).join(" · ") || "Aucun projet"
+                        : "Chargement…"}
                 </p>
-              </div>
+                <div className="flex items-center gap-4">
+                    <LiveIndicator updatedAt={updatedAt} error={error} />
+                    <ProjectForm onCreated={refresh} />
+                </div>
+            </div>
 
-              <DeployButton projectId={project.id} onDeployed={refresh} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+            <Panel title="Projets déployés" description="Clonés, construits et publiés derrière Traefik avec un certificat HTTPS">
+                {error && !data ? (
+                    <div className="p-4">
+                        <ErrorBanner>Impossible de joindre deploy-agent.</ErrorBanner>
+                    </div>
+                ) : data?.length === 0 ? (
+                    <EmptyState icon={Boxes} title="Aucun projet déployé">
+                        Crée un projet à partir d&apos;un dépôt Git pour le publier sur un sous-domaine.
+                    </EmptyState>
+                ) : (
+                    <ProjectsTable
+                        projects={data}
+                        actions={(p) => (
+                            <div className="flex items-start justify-end gap-1">
+                                <DeployButton projectId={p.id} building={p.status === "BUILDING"} onDeployed={refresh} />
+                                <DeleteProjectButton project={p} onDeleted={refresh} />
+                            </div>
+                        )}
+                    />
+                )}
+            </Panel>
+        </div>
+    );
 }

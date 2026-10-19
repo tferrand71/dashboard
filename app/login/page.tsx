@@ -3,6 +3,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
+import { Boxes, Cpu, HardDrive, Loader2, Lock } from "lucide-react";
+
+const features = [
+    { icon: Boxes, title: "Projets", text: "Déploiement depuis Git, HTTPS automatique via Traefik." },
+    { icon: Cpu, title: "Système", text: "CPU, mémoire, disque et conteneurs Docker en direct." },
+    { icon: HardDrive, title: "Drive", text: "Fichiers personnels stockés sur le VPS." },
+];
 
 export default function LoginPage() {
     const router = useRouter();
@@ -40,96 +47,130 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
-            {/* Halos ambiants — mêmes codes que le hero du portfolio. */}
-            <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10">
-                <div className="ambient-glow absolute -left-1/4 top-0 h-[70vw] w-[70vw] rounded-full bg-mauve/10 blur-[120px]" />
-                <div
-                    className="ambient-glow absolute -right-1/4 bottom-0 h-[60vw] w-[60vw] rounded-full bg-pink/[0.08] blur-[110px]"
-                    style={{ animationDelay: "-9s" }}
-                />
-            </div>
-
-            <div className="w-full max-w-sm animate-rise">
-                <div className="mb-8 text-center">
+        <div className="grid min-h-screen lg:grid-cols-2">
+            <div className="flex flex-col px-6 py-8 sm:px-10">
+                <div className="flex items-center gap-2.5">
                     <span
                         aria-hidden="true"
-                        className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-2xl border border-gold/30 bg-glass font-serif text-xl font-bold text-gold backdrop-blur-xl"
+                        className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-br from-accent to-accent-hover text-[13px] font-bold text-white"
                     >
                         T
                     </span>
-                    <p className="eyebrow">Accès privé</p>
-                    <h1 className="mt-2 font-serif text-3xl font-bold tracking-tight text-text-main">
-                        Infra<span className="text-gold">.</span>
-                    </h1>
-                    <p className="mt-2 font-mono text-[11px] text-text-muted">
-                        tobias-ferrand.fr
-                    </p>
+                    <span className="text-[13px] font-semibold text-fg">Infrastructure</span>
                 </div>
 
-                <form
-                    onSubmit={handleSubmit}
-                    noValidate
-                    className="glass-panel space-y-4 rounded-2xl p-6 sm:p-7"
-                >
-                    {/* aria-live : l'erreur est annoncée dès son apparition. */}
-                    <div aria-live="polite" role="status">
-                        {error && (
-                            <p className="rounded-xl border border-down/30 bg-down/10 px-3 py-2.5 text-xs font-medium text-text-main">
-                                {error}
-                            </p>
-                        )}
-                    </div>
+                <div className="flex flex-1 items-center justify-center py-12">
+                    <div className="animate-fade-in w-full max-w-sm">
+                        <h1 className="text-2xl font-semibold tracking-tight text-fg">Connexion</h1>
+                        <p className="mt-1.5 text-sm text-fg-muted">
+                            Accès réservé à l&apos;administrateur de tobias-ferrand.fr.
+                        </p>
 
-                    <div>
-                        <label
-                            htmlFor="email"
-                            className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted"
-                        >
-                            E-mail
-                        </label>
-                        <input
-                            id="email"
-                            name="email"
-                            type="email"
-                            autoComplete="username"
-                            required
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            disabled={isSubmitting}
-                            className="w-full rounded-xl border border-hairline bg-ink/50 px-3.5 py-2.5 text-sm text-text-main transition-colors placeholder:text-text-muted/50 hover:border-hairline-strong focus:border-mauve focus:outline-none disabled:opacity-60"
-                        />
-                    </div>
+                        <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-4">
+                            {/* aria-live : l'erreur est annoncée dès son apparition. */}
+                            <div aria-live="polite" role="status">
+                                {error && (
+                                    <p className="rounded-md border border-down/25 bg-down/10 px-3 py-2 text-[13px] text-down">
+                                        {error}
+                                    </p>
+                                )}
+                            </div>
 
-                    <div>
-                        <label
-                            htmlFor="password"
-                            className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.18em] text-text-muted"
-                        >
-                            Mot de passe
-                        </label>
-                        <input
-                            id="password"
-                            name="password"
-                            type="password"
-                            autoComplete="current-password"
-                            required
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            disabled={isSubmitting}
-                            className="w-full rounded-xl border border-hairline bg-ink/50 px-3.5 py-2.5 text-sm text-text-main transition-colors placeholder:text-text-muted/50 hover:border-hairline-strong focus:border-mauve focus:outline-none disabled:opacity-60"
-                        />
-                    </div>
+                            <div>
+                                <label htmlFor="email" className="label">
+                                    E-mail
+                                </label>
+                                <input
+                                    id="email"
+                                    name="email"
+                                    type="email"
+                                    autoComplete="username"
+                                    required
+                                    autoFocus
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    disabled={isSubmitting}
+                                    className="input h-10"
+                                />
+                            </div>
 
-                    <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className="mt-2 w-full rounded-full bg-gold py-3 text-xs font-bold uppercase tracking-[0.2em] text-ink transition-all hover:scale-[1.02] hover:shadow-gold-glow disabled:scale-100 disabled:opacity-60 disabled:shadow-none"
-                    >
-                        {isSubmitting ? "Connexion…" : "Se connecter"}
-                    </button>
-                </form>
+                            <div>
+                                <label htmlFor="password" className="label">
+                                    Mot de passe
+                                </label>
+                                <input
+                                    id="password"
+                                    name="password"
+                                    type="password"
+                                    autoComplete="current-password"
+                                    required
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    disabled={isSubmitting}
+                                    className="input h-10"
+                                />
+                            </div>
+
+                            <button type="submit" disabled={isSubmitting} className="btn btn-primary h-10 w-full text-sm">
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Connexion…
+                                    </>
+                                ) : (
+                                    "Se connecter"
+                                )}
+                            </button>
+                        </form>
+
+                        <p className="mt-6 flex items-center gap-2 text-xs text-fg-subtle">
+                            <Lock className="h-3.5 w-3.5" />
+                            Connexion chiffrée · session sécurisée par cookie httpOnly
+                        </p>
+                    </div>
+                </div>
+
+                <p className="font-mono text-[11px] text-fg-subtle">VPS OVH · Gravelines</p>
             </div>
+
+            <aside className="relative hidden overflow-hidden border-l border-line bg-surface lg:flex lg:flex-col lg:justify-center lg:px-16">
+                {/* Grille discrète en fond */}
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 opacity-[0.35] [background-image:linear-gradient(var(--color-line)_1px,transparent_1px),linear-gradient(90deg,var(--color-line)_1px,transparent_1px)] [background-size:48px_48px] [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_75%)]"
+                />
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-accent/25 blur-[110px]"
+                />
+                <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute -bottom-40 left-10 h-80 w-80 rounded-full bg-pink/10 blur-[110px]"
+                />
+
+                <div className="relative max-w-md">
+                    <p className="text-sm font-medium text-accent-fg">Console d&apos;administration</p>
+                    <h2 className="mt-3 text-3xl font-semibold leading-tight tracking-tight text-fg">
+                        Toute l&apos;infrastructure auto-hébergée,{" "}
+                        <span className="bg-gradient-to-r from-accent-fg to-pink bg-clip-text text-transparent">
+                            au même endroit.
+                        </span>
+                    </h2>
+                    <ul className="mt-10 space-y-5">
+                        {features.map(({ icon: Icon, title, text }) => (
+                            <li key={title} className="flex gap-4">
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent/12 text-accent-fg ring-1 ring-accent/25">
+                                    <Icon className="h-4 w-4" strokeWidth={1.75} />
+                                </span>
+                                <span>
+                                    <span className="block text-sm font-medium text-fg">{title}</span>
+                                    <span className="block text-[13px] text-fg-muted">{text}</span>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </aside>
         </div>
     );
 }
