@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ArrowDownUp, Container, Cpu, HardDrive, MemoryStick, Search } from "lucide-react";
-import type { AgentProject, ContainerStats } from "@/lib/agent";
+import type { AgentProject, ContainerStats, ContainerStorage } from "@/lib/agent";
 import { containerLabel, isEphemeral, level } from "@/lib/agent";
 import { formatBytes, formatPercent } from "@/lib/format";
 import { hostCards, MetricCard, useContainers, useHostStats } from "../../_components/live-metrics";
@@ -29,7 +29,23 @@ function parseStatus(status: string): { running: boolean; uptime: string; health
 
 type SortKey = "name" | "cpu" | "memory";
 
-function ContainerTable({ rows, projects }: { rows: ContainerStats[]; projects: AgentProject[] }) {
+/** Détail du stockage au survol : couche propre, image partagée, volumes. */
+function storageTitle(st: ContainerStorage): string {
+    const vols = st.volumes.length
+        ? st.volumes.map((v) => `${v.name} : ${v.sizeBytes === null ? "taille inconnue" : formatBytes(v.sizeBytes)}`).join("\n")
+        : "aucun volume";
+    return `Couche propre : ${formatBytes(st.writableBytes)}\nImage (partagée) : ${formatBytes(st.imageBytes)}\n${vols}`;
+}
+
+function ContainerTable({
+    rows,
+    projects,
+    storage,
+}: {
+    rows: ContainerStats[];
+    projects: AgentProject[];
+    storage: Map<string, ContainerStorage>;
+}) {
     return (
         <div className="overflow-x-auto">
             <table className="w-full text-left text-[13px]">
@@ -37,6 +53,7 @@ function ContainerTable({ rows, projects }: { rows: ContainerStats[]; projects: 
                     <tr className="border-b border-line">
                         <th scope="col" className="px-4 py-2.5 font-medium">Conteneur</th>
                         <th scope="col" className="hidden px-4 py-2.5 font-medium md:table-cell">État</th>
+                        <th scope="col" className="w-28 px-4 py-2.5 text-right font-medium sm:w-36">Stockage</th>
                         <th scope="col" className="w-28 px-4 py-2.5 text-right font-medium sm:w-40">CPU</th>
                         <th scope="col" className="w-32 px-4 py-2.5 text-right font-medium sm:w-48">Mémoire</th>
                     </tr>
@@ -71,6 +88,18 @@ function ContainerTable({ rows, projects }: { rows: ContainerStats[]; projects: 
                                         <span className="tabular text-xs text-fg-subtle">{s.uptime}</span>
                                     </div>
                                 </td>
+                                <td className="px-4 py-3 text-right">
+                                    {(() => {
+                                        const st = storage.get(c.id);
+                                        return st ? (
+                                            <span className="tabular text-xs text-fg-muted" title={storageTitle(st)}>
+                                                {formatBytes(st.totalBytes)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-xs text-fg-subtle">—</span>
+                                        );
+                                    })()}
+                                </td>
                                 <td className="px-4 py-3">
                                     <div className="flex items-center justify-end gap-3">
                                         <span className="hidden w-16 sm:block">
@@ -104,6 +133,9 @@ export function SystemMonitor() {
     const host = useHostStats();
     const containers = useContainers(5000);
     const projects = usePoll<AgentProject[]>("/api/deploy/projects", 30000);
+    // le stockage se calcule côté Docker (plus lent) : rafraîchi seulement chaque minute
+    const storage = usePoll<ContainerStorage[]>("/api/deploy/system/storage", 60000);
+    const storageById = useMemo(() => new Map((storage.data ?? []).map((st) => [st.id, st])), [storage.data]);
     const [query, setQuery] = useState("");
     const [sort, setSort] = useState<SortKey>("memory");
 
@@ -192,7 +224,7 @@ export function SystemMonitor() {
                 ) : services.length === 0 ? (
                     <EmptyState icon={Container} title={query ? "Aucun résultat" : "Aucun conteneur actif"} />
                 ) : (
-                    <ContainerTable rows={services} projects={projects.data ?? []} />
+                    <ContainerTable rows={services} projects={projects.data ?? []} storage={storageById} />
                 )}
             </Panel>
 
@@ -201,7 +233,7 @@ export function SystemMonitor() {
                     title="Conteneurs temporaires"
                     description="Étapes de build ou commandes ponctuelles : Docker leur donne un nom au hasard et les supprime à la fin."
                 >
-                    <ContainerTable rows={ephemeral} projects={projects.data ?? []} />
+                    <ContainerTable rows={ephemeral} projects={projects.data ?? []} storage={storageById} />
                 </Panel>
             )}
         </div>

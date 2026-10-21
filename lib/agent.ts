@@ -29,6 +29,16 @@ export type ContainerStats = {
     memory: { usedBytes: number; limitBytes: number; percent: number };
 };
 
+/** Stockage d'un conteneur (route /system/storage) : couche inscriptible, part de l'image, volumes nommés. */
+export type ContainerStorage = {
+    id: string;
+    name: string;
+    writableBytes: number;
+    imageBytes: number;
+    volumes: { name: string; sizeBytes: number | null }[];
+    totalBytes: number;
+};
+
 /**
  * Conteneur éphémère : étape de build Docker ou commande ponctuelle.
  * Docker leur donne un nom « adjectif_scientifique » (sleepy_johnson…)
