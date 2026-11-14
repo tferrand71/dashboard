@@ -7,9 +7,16 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
 
+  // deploy-agent exige un jeton sur toute son API (sinon n'importe quel conteneur du VPS pourrait
+  // lancer ou supprimer des déploiements). Lu à l'appel : jamais exposé au navigateur.
+  const agentToken = process.env.AGENT_API_TOKEN;
+  if (!agentToken) {
+    return NextResponse.json({ error: "AGENT_API_TOKEN non configurée sur le dashboard" }, { status: 500 });
+  }
+
   // Les paramètres de requête (filtres analytics…) suivent le chemin
   const url = `${AGENT_URL}/${path.map(encodeURIComponent).join("/")}${req.nextUrl.search}`;
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { Authorization: `Bearer ${agentToken}` };
 
   let body: string | undefined;
   if (req.method !== "GET") {
@@ -23,6 +30,12 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     headers,
     body,
   });
+
+  // 401 de l'agent = jeton refusé (mal copié ou changé d'un côté seulement). On le distingue d'une
+  // session expirée du dashboard, sinon l'interface renverrait l'utilisateur sur la page de connexion.
+  if (res.status === 401) {
+    return NextResponse.json({ error: "deploy-agent a refusé le jeton du dashboard (AGENT_API_TOKEN)" }, { status: 502 });
+  }
 
   if (res.status === 204) return new NextResponse(null, { status: 204 });
   const data = await res.json();
