@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Boxes, Cpu, HardDrive, LayoutDashboard } from "lucide-react";
+import { BarChart3, Boxes, Clapperboard, Cpu, HardDrive, LayoutDashboard } from "lucide-react";
 
 export type NavItem = {
     label: string;
@@ -29,6 +29,7 @@ export const navGroups: NavGroup[] = [
         items: [
             { label: "Drive", href: "/drive", icon: HardDrive, available: true },
             { label: "Analytics", href: "/analytics", icon: BarChart3, available: true },
+            { label: "Plex", href: "/plex", icon: Clapperboard, available: true },
         ],
     },
 ];
