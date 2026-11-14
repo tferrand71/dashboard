@@ -18,6 +18,7 @@ export function usePoll<T>(
     path: string,
     intervalMs: number,
     onData?: (data: T) => void,
+    errorLabel = "deploy-agent injoignable",
 ): PollState<T> {
     const [data, setData] = useState<T | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -37,9 +38,9 @@ export function usePoll<T>(
             setUpdatedAt(new Date());
             onDataRef.current?.(json);
         } catch {
-            setError("deploy-agent injoignable");
+            setError(errorLabel);
         }
-    }, [path]);
+    }, [path, errorLabel]);
 
     useEffect(() => {
         let timer: ReturnType<typeof setInterval> | undefined;
