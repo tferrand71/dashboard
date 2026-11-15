@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clapperboard, Film, Tv, WifiOff } from "lucide-react";
+import Link from "next/link";
+import { Clapperboard, Film, FolderUp, Tv, WifiOff } from "lucide-react";
 import type { PlexAccount, PlexHistoryItem, PlexOnDeckItem, PlexOverview, PlexSession } from "@/lib/plex";
 import { formatDuration, timeAgo } from "@/lib/format";
 import { Badge, EmptyState, ErrorBanner, LiveIndicator, Meter, Panel, Skeleton } from "../../_components/ui";
@@ -232,7 +233,11 @@ export function PlexPanel() {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-end">
+            <div className="flex items-center justify-between gap-3">
+                <Link href="/plex/fichiers" className="btn btn-secondary">
+                    <FolderUp className="h-3.5 w-3.5" />
+                    Envoyer ou supprimer des fichiers
+                </Link>
                 <LiveIndicator updatedAt={updatedAt} error={error ?? (offline ? "Plex hors ligne" : null)} />
             </div>
 

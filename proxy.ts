@@ -21,5 +21,7 @@ export const proxy = auth((req: NextRequest & { auth?: unknown }) => {
 });
 
 export const config = {
-  matcher: ["/((?!login|api/auth|_next/static|_next/image|favicon.ico).*)"],
+  // api/plex/files/chunk : envois de fichiers volumineux. Le proxy copierait leur corps en mémoire
+  // (10 Mo max, tronqué au-delà) ; la route vérifie elle-même la session.
+  matcher: ["/((?!login|api/auth|api/plex/files/chunk|_next/static|_next/image|favicon.ico).*)"],
 };
