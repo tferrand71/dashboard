@@ -6,6 +6,7 @@ import type { PlexAccount, PlexHistoryItem, PlexOnDeckItem, PlexOverview, PlexSe
 import { formatDuration, timeAgo } from "@/lib/format";
 import { Badge, EmptyState, ErrorBanner, LiveIndicator, Meter, Panel, Skeleton } from "../../_components/ui";
 import { usePoll } from "../../_components/use-poll";
+import { PowerPanel } from "./power-panel";
 
 function initials(name: string): string {
     return name
@@ -244,6 +245,10 @@ export function PlexPanel() {
             )}
 
             {offline && <PlexOffline reason={!data.online ? data.reason : ""} />}
+
+            {/* Toujours visible, même serveur hors ligne : c'est précisément là qu'on en a besoin. */}
+            <PowerPanel />
+
 
             {online && (
                 <>
