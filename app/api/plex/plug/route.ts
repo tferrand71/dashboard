@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getPlugStatus, plugConfigured, plugOn, restartServer } from "@/lib/plug";
+import { getPlugStatus, plugConfigured, plugOff, plugOn, restartServer } from "@/lib/plug";
 
 export async function GET() {
     const session = await auth();
@@ -35,6 +35,10 @@ export async function POST(request: Request) {
 
     if (body.action === "restart") {
         const result = await restartServer(body.force === true);
+        return NextResponse.json(result, { status: result.ok ? 200 : result.blocked ? 409 : 502 });
+    }
+    if (body.action === "off") {
+        const result = await plugOff(body.force === true);
         return NextResponse.json(result, { status: result.ok ? 200 : result.blocked ? 409 : 502 });
     }
     if (body.action === "on") {

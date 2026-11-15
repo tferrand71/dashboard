@@ -121,7 +121,7 @@ async function setSwitch(on: boolean): Promise<void> {
 
 /* ── Vérification : mise à jour en cours sur le serveur (SSH) ── */
 
-type Probe = { state: "ok" | "blocked" | "unreachable"; detail: string };
+export type Probe = { state: "ok" | "blocked" | "unreachable"; detail: string };
 
 /**
  * La clé SSH est restreinte côté serveur à un script qui exécute `pgrep` sur les
@@ -181,7 +181,7 @@ function probeUpdates(): Promise<Probe> {
 
 /* ── Vérification : lecture Plex en cours ─────────────────── */
 
-async function probePlayback(): Promise<Probe> {
+export async function probePlayback(): Promise<Probe> {
     const baseUrl = process.env.PLEX_URL?.replace(/\/$/, "");
     const token = process.env.PLEX_TOKEN;
     if (!baseUrl || !token) return { state: "unreachable", detail: "Plex non configuré" };
@@ -254,6 +254,24 @@ export async function restartServer(force: boolean): Promise<PlugActionResult> {
         try {
             await setSwitch(true);
         } catch {}
+        return { ok: false, blocked: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
+    } finally {
+        busy = false;
+    }
+}
+
+/** Coupe le courant sans le rétablir, après les mêmes vérifications que le redémarrage. */
+export async function plugOff(force: boolean): Promise<PlugActionResult> {
+    if (busy) return { ok: false, blocked: false, error: "Une opération est déjà en cours." };
+    busy = true;
+    try {
+        const check = await checkBeforeCut();
+        if (check.blockers.length > 0 && !force) {
+            return { ok: false, blocked: true, blockers: check.blockers, warnings: check.warnings };
+        }
+        await setSwitch(false);
+        return { ok: true, message: "Prise éteinte : le serveur n'est plus alimenté.", warnings: check.warnings };
+    } catch (e) {
         return { ok: false, blocked: false, error: e instanceof Error ? e.message : "Erreur inconnue" };
     } finally {
         busy = false;

@@ -7,15 +7,19 @@ Appelée par SSH via une clé dont `authorized_keys` force cette commande :
 Le client envoie `gate <base64 d'un JSON>` ; ce script lit SSH_ORIGINAL_COMMAND,
 exécute UNE opération et répond par une ligne JSON sur stdout.
 
-Opérations : roots, ls, mkdir, rm, et l'envoi par morceaux begin / chunk (octets sur stdin) / end / abort.
+Opérations : roots, ls, mkdir, rm, l'envoi par morceaux begin / chunk (octets sur stdin) / end / abort,
+et les mises à jour système apt_status / apt_update / apt_upgrade (via le script root plex-apt-update).
 Tout est confiné aux bibliothèques `film` et `serie` : pas de « .. », pas de
 chemin absolu, les liens symboliques ne peuvent pas faire sortir du dossier.
 """
 import base64
 import json
 import os
+import re
 import shutil
+import subprocess
 import sys
+import time
 
 ROOTS = {
     "film": "/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/library/film",
@@ -233,8 +237,134 @@ def do_rm(req):
     reply({"ok": True, "freed": freed})
 
 
+# ── Mises à jour système ────────────────────────────────────────────────────
+# Seul le script root /usr/local/sbin/plex-apt-update (sudoers : « update » et « upgrade »,
+# rien d'autre) a les droits nécessaires ; la lecture de l'état se fait sans privilèges.
+APT_SCRIPT = "/usr/local/sbin/plex-apt-update"
+APT_STATUS = "/var/log/plex-apt.status"
+APT_LOG = "/var/log/plex-apt.log"
+APT_STAMP = "/var/lib/apt/periodic/update-success-stamp"
+APT_BUSY = re.compile(
+    r"^([^ ]*/)?(apt|apt-get|aptitude|dpkg|do-release-upgrade|apt\.systemd\.daily)( |$)"
+    r"|^[^ ]*python3? [^ ]*/unattended-upgrade( |$)"
+    r"|^/bin/sh [^ ]*apt\.systemd\.daily"
+)
+
+
+def apt_busy():
+    """Lignes de commande des processus apt/dpkg en cours (hors mise à jour lancée par nous)."""
+    out = subprocess.run(["pgrep", "-a", "-f", APT_BUSY.pattern], capture_output=True, text=True).stdout
+    return [l for l in out.strip().splitlines() if l]
+
+
+def apt_upgradable():
+    """Retourne (à installer, différés).
+
+    « À installer » = ce que `apt-get upgrade` fera réellement (simulation, sans droits root).
+    « Différés » = proposés par `apt list --upgradable` mais que `upgrade` n'installera pas
+    (déploiement progressif d'Ubuntu, paquets retenus) : sans ça, la liste promettrait des
+    mises à jour que le bouton n'installerait jamais.
+    """
+    env = dict(os.environ, LANG="C")
+    listed = {}
+    r = subprocess.run(["apt", "list", "--upgradable"], capture_output=True, text=True, timeout=60, env=env)
+    for line in r.stdout.splitlines():
+        m = re.match(r"^([^/\s]+)/\S+\s+(\S+)\s+\S+(?:\s+\[upgradable from: (\S+)\])?", line)
+        if m:
+            listed[m.group(1)] = {"name": m.group(1), "to": m.group(2), "from": m.group(3)}
+    sim = subprocess.run(["apt-get", "-s", "-q", "upgrade"], capture_output=True, text=True, timeout=60, env=env)
+    todo = []
+    for line in sim.stdout.splitlines():
+        m = re.match(r"^Inst (\S+) \[(\S+)\] \((\S+) ", line)
+        if m:
+            todo.append({"name": m.group(1), "from": m.group(2), "to": m.group(3)})
+    names = {p["name"] for p in todo}
+    deferred = [p for n, p in listed.items() if n not in names]
+    return todo, deferred
+
+
+def apt_state():
+    try:
+        with open(APT_STATUS) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        return {"state": "idle"}
+    if st.get("state") == "running":
+        try:
+            os.kill(int(st["pid"]), 0)
+        except ProcessLookupError:
+            return {"state": "interrupted", "started": st.get("started")}
+        except (PermissionError, KeyError, ValueError):
+            pass  # le processus appartient à root : il tourne bien
+    return st
+
+
+def apt_log_tail(n=40):
+    try:
+        with open(APT_LOG, errors="replace") as f:
+            return "".join(f.readlines()[-n:])
+    except OSError:
+        return ""
+
+
+def apt_snapshot():
+    try:
+        checked = int(os.path.getmtime(APT_STAMP))
+    except OSError:
+        checked = None
+    todo, deferred = apt_upgradable()
+    return {
+        "ok": True,
+        "upgradable": todo,
+        "deferred": deferred,
+        "state": apt_state(),
+        "log": apt_log_tail(),
+        "reboot_required": os.path.exists("/var/run/reboot-required"),
+        "checked": checked,
+        "now": int(time.time()),
+    }
+
+
+def sudo_script(arg, timeout):
+    try:
+        r = subprocess.run(["sudo", "-n", APT_SCRIPT, arg], capture_output=True, text=True, timeout=timeout,
+                           env=dict(os.environ, LANG="C"))
+    except subprocess.TimeoutExpired:
+        fail("délai dépassé")
+    if r.returncode != 0:
+        detail = (r.stderr or r.stdout).strip().splitlines()
+        if "password is required" in (r.stderr or ""):
+            fail("mises à jour non autorisées sur le serveur (règle sudoers absente)")
+        fail(detail[-1] if detail else f"code {r.returncode}")
+    return r
+
+
+def do_apt_status(_):
+    reply(apt_snapshot())
+
+
+def do_apt_update(_):
+    if apt_state().get("state") == "running":
+        fail("une mise à jour est en cours")
+    if apt_busy():
+        fail("apt est occupé (mise à jour automatique en cours), réessaie dans un instant")
+    sudo_script("update", 300)
+    reply(apt_snapshot())
+
+
+def do_apt_upgrade(_):
+    if apt_state().get("state") == "running":
+        fail("une mise à jour est déjà en cours")
+    if apt_busy():
+        fail("apt est occupé (mise à jour automatique en cours), réessaie dans un instant")
+    sudo_script("upgrade", 30)
+    reply({"ok": True, "started": True})
+
+
+
 OPS = {"roots": do_roots, "ls": do_ls, "mkdir": do_mkdir, "begin": do_begin, "chunk": do_chunk,
-       "end": do_end, "abort": do_abort, "rm": do_rm}
+       "end": do_end, "abort": do_abort, "rm": do_rm,
+       "apt_status": do_apt_status, "apt_update": do_apt_update, "apt_upgrade": do_apt_upgrade}
 
 
 def main():

@@ -72,7 +72,11 @@ const CALL_TIMEOUT_MS = 120_000;
  * Envoie une opération ; `body` (optionnel) est relayé tel quel sur l'entrée standard
  * de la passerelle (c'est ainsi que passent les octets d'un morceau de fichier).
  */
-export async function gate<T extends object>(op: Record<string, unknown>, body?: Readable): Promise<GateReply<T>> {
+export async function gate<T extends object>(
+    op: Record<string, unknown>,
+    body?: Readable,
+    timeoutMs: number = CALL_TIMEOUT_MS,
+): Promise<GateReply<T>> {
     const conn = await getConnection();
     const command = "gate " + Buffer.from(JSON.stringify(op)).toString("base64");
 
@@ -86,7 +90,7 @@ export async function gate<T extends object>(op: Record<string, unknown>, body?:
         };
         const timer = setTimeout(() => {
             finish(() => reject(new Error("Le serveur Plex ne répond pas (délai dépassé)")));
-        }, CALL_TIMEOUT_MS);
+        }, timeoutMs);
 
         conn.exec(command, (err, stream) => {
             if (err) {

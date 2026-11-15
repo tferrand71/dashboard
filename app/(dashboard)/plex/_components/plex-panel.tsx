@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Clapperboard, Film, FolderUp, Tv, WifiOff } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Clapperboard, Film, Play, Tv, WifiOff } from "lucide-react";
 import type { PlexAccount, PlexHistoryItem, PlexOnDeckItem, PlexOverview, PlexSession } from "@/lib/plex";
 import { formatDuration, timeAgo } from "@/lib/format";
 import { Badge, EmptyState, ErrorBanner, LiveIndicator, Meter, Panel, Skeleton } from "../../_components/ui";
 import { usePoll } from "../../_components/use-poll";
 import { PowerPanel } from "./power-panel";
+import { UpdatesPanel } from "./updates-panel";
 
 function initials(name: string): string {
     return name
@@ -28,7 +28,7 @@ function PlexOffline({ reason }: { reason: string }) {
     return (
         <Panel title="Plex">
             <EmptyState icon={WifiOff} title="Serveur Plex hors ligne">
-                {reason} — rien d&rsquo;autre dans le dashboard n&rsquo;en dépend, réessaie quand il sera allumé.
+                {reason}. Son alimentation se gère juste en dessous.
             </EmptyState>
         </Panel>
     );
@@ -228,21 +228,36 @@ export function PlexPanel() {
 
     const offline = data && !data.online;
     const online = data && data.online ? data : null;
-
-    const library = useMemo(() => online?.library ?? null, [online]);
+    const library = online?.library;
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3">
-                <Link href="/plex/fichiers" className="btn btn-secondary">
-                    <FolderUp className="h-3.5 w-3.5" />
-                    Envoyer ou supprimer des fichiers
-                </Link>
-                <LiveIndicator updatedAt={updatedAt} error={error ?? (offline ? "Plex hors ligne" : null)} />
+            {/* Barre d'état : l'essentiel d'un coup d'œil */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="flex min-w-0 items-center gap-2.5">
+                    {!data && !error && <Skeleton className="h-5 w-44" />}
+                    {online && (
+                        <>
+                            <Badge tone="ok" dot>
+                                En ligne
+                            </Badge>
+                            <span className="truncate text-[13px] text-fg-muted">
+                                {online.serverName} · version {online.version}
+                            </span>
+                        </>
+                    )}
+                    {offline && (
+                        <Badge tone="down" dot>
+                            Hors ligne
+                        </Badge>
+                    )}
+                </div>
+                <LiveIndicator updatedAt={updatedAt} error={error} />
             </div>
 
             {!data && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <Skeleton className="h-24" />
                     <Skeleton className="h-24" />
                     <Skeleton className="h-24" />
                     <Skeleton className="h-24" />
@@ -251,20 +266,24 @@ export function PlexPanel() {
 
             {offline && <PlexOffline reason={!data.online ? data.reason : ""} />}
 
+            {online && (
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <StatTile icon={Film} value={String(library?.movies ?? 0)} label="Films" />
+                    <StatTile icon={Tv} value={String(library?.shows ?? 0)} label="Séries" />
+                    <StatTile icon={Clapperboard} value={String(library?.episodes ?? 0)} label="Épisodes" />
+                    <StatTile icon={Play} value={String(online.sessions.length)} label="En lecture" />
+                </div>
+            )}
+
             {/* Toujours visible, même serveur hors ligne : c'est précisément là qu'on en a besoin. */}
             <PowerPanel />
 
+            <UpdatesPanel />
 
             {online && (
                 <>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        <StatTile icon={Film} value={String(library?.movies ?? 0)} label="Films" />
-                        <StatTile icon={Tv} value={String(library?.shows ?? 0)} label="Séries" />
-                        <StatTile icon={Clapperboard} value={String(library?.episodes ?? 0)} label="Épisodes" />
-                    </div>
-
                     <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-                        <Panel title="Reprendre la lecture" description="Avancement par film ou épisode en cours" bodyClassName="">
+                        <Panel title="Reprendre la lecture" description="Films et épisodes inachevés">
                             {online.onDeck.length === 0 ? (
                                 <EmptyState icon={Film} title="Rien en cours">
                                     Aucune lecture inachevée pour l&rsquo;instant.

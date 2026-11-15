@@ -1,0 +1,54 @@
+#!/bin/bash
+# Point d'entrée ROOT unique pour les mises à jour du serveur Plex, piloté par le dashboard.
+#
+# Installé dans /usr/local/sbin (propriétaire root, non modifiable par l'utilisateur `serveur`).
+# La règle sudoers autorise `serveur` à lancer UNIQUEMENT :
+#     /usr/local/sbin/plex-apt-update update
+#     /usr/local/sbin/plex-apt-update upgrade
+#
+#   update   apt-get update (rafraîchit la liste des paquets), au premier plan
+#   upgrade  lance apt-get upgrade EN ARRIÈRE-PLAN (détaché) et rend la main tout de suite ;
+#            la progression est lisible dans /var/log/plex-apt.log et /var/log/plex-apt.status
+#   _run     interne : exécuté par `upgrade`, pas autorisé par sudoers
+set -u
+LOG=/var/log/plex-apt.log
+STATUS=/var/log/plex-apt.status
+export DEBIAN_FRONTEND=noninteractive
+export LANG=C
+
+case "${1:-}" in
+  update)
+    exec apt-get update -q
+    ;;
+
+  upgrade)
+    if [ -f "$STATUS" ] && grep -q '"state": "running"' "$STATUS"; then
+      pid=$(sed -n 's/.*"pid": \([0-9]*\).*/\1/p' "$STATUS")
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        echo "une mise à jour est déjà en cours" >&2
+        exit 3
+      fi
+    fi
+    nohup setsid "$0" _run >"$LOG" 2>&1 < /dev/null &
+    echo "démarrée"
+    exit 0
+    ;;
+
+  _run)
+    start=$(date +%s)
+    echo "{\"state\": \"running\", \"pid\": $$, \"started\": $start}" > "$STATUS"
+    apt-get -y -q \
+      -o DPkg::Lock::Timeout=300 \
+      -o Dpkg::Options::=--force-confdef \
+      -o Dpkg::Options::=--force-confold \
+      upgrade
+    rc=$?
+    echo "{\"state\": \"finished\", \"exit\": $rc, \"started\": $start, \"ended\": $(date +%s)}" > "$STATUS"
+    exit $rc
+    ;;
+
+  *)
+    echo "usage : plex-apt-update update|upgrade" >&2
+    exit 2
+    ;;
+esac

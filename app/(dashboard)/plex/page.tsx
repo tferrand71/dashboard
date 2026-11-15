@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { FolderUp, Users } from "lucide-react";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { PageHeader } from "../_components/ui";
@@ -15,7 +17,19 @@ export default async function PlexPage() {
             <PageHeader
                 eyebrow="Services"
                 title="Plex"
-                description="Bibliothèque, avancement de lecture et activité du serveur à la maison, joint via Tailscale."
+                description="Bibliothèque, lectures en cours et alimentation du serveur à la maison, joint via Tailscale."
+                actions={
+                    <>
+                        <Link href="/plex/utilisateurs" className="btn btn-secondary">
+                            <Users className="h-3.5 w-3.5" />
+                            Utilisateurs
+                        </Link>
+                        <Link href="/plex/fichiers" className="btn btn-primary">
+                            <FolderUp className="h-3.5 w-3.5" />
+                            Gérer les fichiers
+                        </Link>
+                    </>
+                }
             />
             <PlexPanel />
         </>
